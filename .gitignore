@@ -1,0 +1,30 @@
+# Maven
+target/
+*.class
+
+# Собранные плагины
+*.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+nbproject/
+
+# Windows / macOS
+Thumbs.db
+.DS_Store
+
+# Локальные настройки и логи
+*.log
+logs/
+run/
+servers/
+
+# Скриншоты вики (генерируются, не хранятся в репозитории)
+docs/*.png

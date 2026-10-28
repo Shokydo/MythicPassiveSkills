@@ -1,0 +1,104 @@
+# ============================================================
+#  Примеры пассивных навыков MythicPassiveSkills
+# ============================================================
+#  Файл лежит в plugins/MythicMobs/PassiveSkills/example.yml
+#  Все примеры выключены (Enabled: false), чтобы плагин не искал
+#  несуществующие скиллы. Включите нужный профиль и создайте
+#  указанные скиллы в plugins/MythicMobs/Skills/.
+#
+#  Permission — нода (или несколько через запятую). Достаточно любой.
+#  Skills     — список полных строк MythicMobs:
+#                 <механика> @таргет ~триггер ?условие
+#               Триггер задаёт режим работы:
+#                 ~onTimer:40  — каждые 40 тиков (2 секунды);
+#                 ~onSneak     — когда игрок присел;
+#                 ~onAttack    — когда игрок атаковал;
+#                 и т.д. (см. README).
+#               Условия после "?" проверяются MythicMobs перед срабатыванием.
+#
+#  Для совместимости поддерживается и старый формат:
+#    Trigger, Interval, Conditions, а в Skills — просто имя скилла.
+#  Пример старого формата — в конце файла.
+# ============================================================
+
+PassiveSkills:
+
+  # Пассивная аура: скилл выполняется каждые 2 секунды, пока у игрока есть право.
+  example_aura:
+    Enabled: false
+    Permission: mythicpassives.example.aura
+    Skills:
+      - "skill{s=ExamplePassiveAura} @self ~onTimer:40 ?health{h=>0}"
+
+  # Пассивка на приседание: срабатывает в момент, когда игрок присел.
+  example_sneak:
+    Enabled: false
+    Permission: mythicpassives.example.sneak
+    Skills:
+      - "skill{s=ExamplePassiveSneak} @self ~onSneak ?sneaking"
+
+  # Пассивка на атаку: скилл применяется к цели атаки через @trigger.
+  example_attack:
+    Enabled: false
+    Permission: mythicpassives.example.attack
+    Skills:
+      - "skill{s=ExamplePassiveAttack} @trigger ~onAttack"
+
+  # Одно действие на таймере и одно на приседании в одном профиле.
+  # example_mixed:
+  #   Permission: mythicpassives.example.mixed
+  #   Skills:
+  #     - "skill{s=ExamplePassiveAura} @self ~onTimer:60"
+  #     - "skill{s=ExamplePassiveSneak} @self ~onSneak"
+
+  # Кнопки предметов, которые MythicCrucible обрабатывает у самого предмета
+  # (onLeftClick, onPress_F, onUse), пассивка НЕ перекрывает. Если нужно, чтобы
+  # они работали одновременно, включите в config.yml
+  #   passive-routing.item-triggers.independent: true
+  # Пример пассивки на F (эффект свапа рук отменяется только когда
+  # у предмета нет собственного onPressF):
+  # example_press_f:
+  #   Permission: mythicpassives.example.pressf
+  #   Skills:
+  #     - "skill{s=ExamplePassivePressF} @self ~onPressF ?sneaking"
+
+  # Можно указать несколько прав: достаточно любого из них.
+  # example_multi:
+  #   Permissions:
+  #     - mythicpassives.example.vip
+  #     - mythicpassives.example.premium
+  #   Skills:
+  #     - "skill{s=ExamplePassiveAura} @self ~onTimer:100"
+
+  # ----------------------------------------------------------
+  #  Старый формат (тоже поддерживается)
+  # ----------------------------------------------------------
+  # example_legacy:
+  #   Enabled: false
+  #   Permission: mythicpassives.example.legacy
+  #   Trigger: interval
+  #   Interval: 40
+  #   Skills:
+  #     - ExamplePassiveAura
+  #   Conditions:
+  #     - "?health{h=>0}"
+
+# ============================================================
+#  Вариант через механику passive{...}
+# ============================================================
+#  Механика включается один раз при выполнении родительского скилла
+#  и дальше работает самостоятельно, пока у игрока есть право.
+#
+#  Пример скилла MythicMobs (plugins/MythicMobs/Skills/example.yml):
+#
+#  ExamplePassiveGrant:
+#    Skills:
+#      - passive{permission=mythicpassives.example.fire;skill=FireAura;interval=40;trigger=interval} @self
+#
+#  Параметры механики:
+#    permission / permissions — нода или список нод (можно не указывать).
+#    skill / skills           — имя скилла MythicMobs (или несколько через запятую)
+#                               либо полная строка MythicMobs.
+#    interval                 — период в тиках для trigger=interval.
+#    trigger                  — interval, sneak, attack, jump и т.д.
+#    conditions / condition   — необязательные условия MythicMobs.

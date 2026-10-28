@@ -1,0 +1,24 @@
+name: MythicPassiveSkills
+version: ${project.version}
+main: ru.shokydo.mythicpassiveskills.MythicPassiveSkillsPlugin
+api-version: '1.20'
+authors: [Shokydo]
+description: Пассивные навыки MythicMobs для игроков, привязанные к permission-нодам
+load: POSTWORLD
+depend: [MythicMobs]
+# MythicCrucible должен включаться раньше нас: тогда его триггеры (onLeftClick,
+# onUse, onPress_F) уже зарегистрированы, и мы не можем занять их через
+# putIfAbsent. LuckPerms нужен для мгновенного обновления прав.
+softdepend: [MythicCrucible, MythicEnchants, LuckPerms, PlaceholderAPI]
+
+commands:
+  passive:
+    description: Управление пассивными навыками MythicMobs
+    aliases: [passives, mps]
+    usage: /passive <reload|list|info|player>
+    permission: mythicpassiveskills.admin
+
+permissions:
+  mythicpassiveskills.admin:
+    description: Доступ к команде /passive
+    default: op

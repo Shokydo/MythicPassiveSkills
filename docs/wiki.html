@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MythicPassiveSkills — Вики и генератор пассивок</title>
+<style>
+  :root {
+    --bg: #0f1720; --panel: #16202b; --panel2: #1c2836; --border: #2b3b4d;
+    --text: #dce6f1; --muted: #8aa0b6; --accent: #35c4a0; --accent2: #4aa8ff;
+    --warn: #ffb454; --err: #ff6b6b; --mono: 'Consolas', 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 'Segoe UI', sans-serif; }
+  a { color: var(--accent2); }
+  .wrap { max-width: 1150px; margin: 0 auto; padding: 24px 18px 80px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); margin-bottom: 28px; }
+  h2 { font-size: 19px; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 40px; }
+  h3 { color: var(--accent2); margin-bottom: 6px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  label:first-child { margin-top: 0; }
+  input[type=text], input[type=number], select {
+    width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; font: 14px var(--mono);
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+  .chk { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--text); font-size: 14px; }
+  button {
+    background: var(--accent); border: none; color: #06231d; font-weight: 600;
+    padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;
+  }
+  button:hover { filter: brightness(1.1); }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  button.small { padding: 4px 10px; font-size: 12px; }
+
+  .skill-row {
+    display: flex; gap: 8px; margin-top: 8px; align-items: flex-start;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+  }
+  .skill-row .line { flex: 1; font-family: var(--mono); font-size: 13px; word-break: break-all; color: var(--text); }
+  .skill-row .line b { color: var(--accent); font-weight: 600; }
+  .skill-row .line i { color: var(--warn); font-style: normal; }
+  .skill-row .line u { color: var(--accent2); text-decoration: none; }
+  .del { background: transparent; border: 1px solid var(--err); color: var(--err); border-radius: 6px; cursor: pointer; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  code { font-family: var(--mono); background: var(--panel2); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; color: var(--accent); }
+  td code { color: var(--text); }
+  .tag { display: inline-block; background: var(--panel2); border: 1px solid var(--border); border-radius: 4px;
+         padding: 1px 8px; font-size: 12px; color: var(--muted); margin: 2px 4px 2px 0; }
+
+  pre { background: #0b131b; border: 1px solid var(--border); border-radius: 8px; padding: 14px;
+        overflow-x: auto; font: 13px/1.55 var(--mono); margin: 0; }
+  pre .k { color: var(--accent); } pre .s { color: var(--warn); } pre .c { color: var(--muted); }
+
+  .note { border-left: 3px solid var(--accent); background: var(--panel2); padding: 10px 14px;
+          border-radius: 0 8px 8px 0; margin: 14px 0; color: var(--muted); font-size: 14px; }
+  .note.warn { border-color: var(--warn); }
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--accent); color: #06231d;
+           padding: 10px 20px; border-radius: 8px; font-weight: 600; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  nav { position: sticky; top: 0; background: var(--bg); z-index: 5; padding: 10px 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  nav a { margin-right: 18px; text-decoration: none; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav>
+  <a href="#gen">Генератор</a>
+  <a href="#format">Формат</a>
+  <a href="#triggers">Триггеры</a>
+  <a href="#conditions">Условия</a>
+  <a href="#targets">Таргетеры</a>
+  <a href="#example">Примеры</a>
+  <a href="#config">Настройки</a>
+  <a href="#debug">Диагностика</a>
+  <a href="#commands">Команды</a>
+</nav>
+
+<h1>Mythic<span>Passive</span>Skills</h1>
+<div class="sub">Вики + интерактивный генератор пассивных навыков для MythicMobs</div>
+
+<!-- ==================== ГЕНЕРАТОР ==================== -->
+<h2 id="gen">Генератор пассивки</h2>
+<div class="grid">
+  <div class="panel">
+    <h3>⚙ Настройки профиля</h3>
+
+    <div class="row">
+      <div>
+        <label>ID профиля (имя секции в yml)</label>
+        <input type="text" id="fId" value="my_passive" oninput="update()">
+      </div>
+      <div>
+        <label>Файл</label>
+        <input type="text" id="fFile" value="passive.yml" oninput="update()">
+      </div>
+    </div>
+
+    <label>Permission (пусто = доступно всем)</label>
+    <input type="text" id="fPerm" placeholder="mythicpassives.example.vip" oninput="update()">
+
+    <div class="chk"><input type="checkbox" id="fEnabled" checked onchange="update()"> Enabled (профиль включён)</div>
+
+    <h3 style="margin-top:22px">➕ Добавить скилл вручную</h3>
+
+    <label>Механика / скилл (обязательно)</label>
+    <input type="text" id="fMechanic" placeholder="skill{s=FireAura} или damage{amount=5}" oninput="update()">
+
+    <label>Таргетер</label>
+    <select id="fTarget" onchange="update()">
+      <option value="">— без таргетера —</option>
+      <option value="@self">@self — сам игрок</option>
+      <option value="@trigger">@trigger — сущность-контекст события</option>
+      <option value="@target">@target — цель (сам игрок)</option>
+      <option value="@selflocation">@selflocation — локация игрока</option>
+      <option value="@forward{f=3;y=0}">@forward{f=3} — точка перед игроком</option>
+      <option value="@playersinradius{r=5}">@playersinradius{r=5} — игроки в радиусе</option>
+      <option value="@mobsinradius{r=5}">@mobsinradius{r=5} — мобы в радиусе</option>
+    </select>
+
+    <label>Триггер</label>
+    <select id="fTrigger" onchange="update()">
+      <option value="onTimer:40">~onTimer:40 — каждые 2 сек (таймер)</option>
+      <option value="onTimer:20">~onTimer:20 — каждую секунду</option>
+      <option value="onTimer:100">~onTimer:100 — каждые 5 сек</option>
+      <option value="onTimer:200">~onTimer:200 — каждые 10 сек</option>
+      <option value="onSneak">~onSneak — игрок присел</option>
+      <option value="onUnsneak">~onUnsneak — игрок встал</option>
+      <option value="onAttack">~onAttack — атака</option>
+      <option value="onDamaged">~onDamaged — получил урон</option>
+      <option value="onJump">~onJump — прыжок</option>
+      <option value="onPressSpace">~onPressSpace — пробел (прыжок)</option>
+      <option value="onKill">~onKill — убил сущность</option>
+      <option value="onDeath">~onDeath — смерть игрока</option>
+      <option value="onRespawn">~onRespawn — респавн</option>
+      <option value="onBlockBreak">~onBlockBreak — сломал блок</option>
+      <option value="onBlockPlace">~onBlockPlace — поставил блок</option>
+      <option value="onInteract">~onInteract — ПКМ (общее)</option>
+      <option value="onRightClick">~onRightClick — ПКМ</option>
+      <option value="onLeftClick">~onLeftClick — ЛКМ</option>
+      <option value="onPrimaryClick">~onPrimaryClick — ЛКМ как кнопка способности</option>
+      <option value="onOffhandClick">~onOffhandClick — ПКМ второй рукой</option>
+      <option value="onPressF">~onPressF — клавиша F (свап рук)</option>
+      <option value="onPressQ">~onPressQ — клавиша Q (выброс)</option>
+      <option value="onPressE">~onPressE — клавиша E (инвентарь)</option>
+      <option value="onPressT">~onPressT — клавиша T (чат)</option>
+      <option value="onPress1">~onPress1 — слот 1</option>
+      <option value="onPress2">~onPress2 — слот 2</option>
+      <option value="onPress3">~onPress3 — слот 3</option>
+      <option value="onPress4">~onPress4 — слот 4</option>
+      <option value="onPress5">~onPress5 — слот 5</option>
+      <option value="onPress6">~onPress6 — слот 6</option>
+      <option value="onPress7">~onPress7 — слот 7</option>
+      <option value="onPress8">~onPress8 — слот 8</option>
+      <option value="onPress9">~onPress9 — слот 9</option>
+      <option value="onHotbar">~onHotbar — любая смена слота</option>
+      <option value="onEquip">~onEquip — надел броню</option>
+      <option value="onUnequip">~onUnequip — снял броню</option>
+      <option value="onPickup">~onPickup — подобрал предмет</option>
+      <option value="onThrow">~onThrow — бросил снаряд</option>
+      <option value="onShoot">~onShoot — выстрел из лука</option>
+      <option value="onConsume">~onConsume — съел/выпил</option>
+      <option value="onFish">~onFish — поймал рыбу</option>
+      <option value="onSprintStart">~onSprintStart — начал бежать</option>
+      <option value="onSprintStop">~onSprintStop — перестал бежать</option>
+      <option value="onHeal">~onHeal — восстановил здоровье</option>
+      <option value="onPortal">~onPortal — вошёл в портал</option>
+      <option value="onTeleport">~onTeleport — телепортация</option>
+      <option value="onWorldChange">~onWorldChange — сменил мир</option>
+    </select>
+
+    <label>Условие (из примера)</label>
+    <select id="fCondition" onchange="update()">
+      <option value="">— без условия —</option>
+      <option value="?health{h=>10}">?health{h=>10} — здоровья больше 10</option>
+      <option value="?health{h=<10}">?health{h=<10} — здоровья меньше 10</option>
+      <option value="?health{h=>0}">?health{h=>0} — жив</option>
+      <option value="?food{f=>10}">?food{f=>10} — сытость больше 10</option>
+      <option value="?sneaking">?sneaking — игрок приседает</option>
+      <option value="?sprinting">?sprinting — игрок бежит</option>
+      <option value="?onground">?onground — стоит на земле</option>
+      <option value="?inwater">?inwater — в воде</option>
+      <option value="?holding{t=DIAMOND_SWORD}">?holding{t=DIAMOND_SWORD} — держит предмет</option>
+      <option value="?wearing{slot=HEAD;t=DIAMOND_HELMET}">?wearing{slot=HEAD;t=...} — надет шлем</option>
+      <option value="?gamemode{gm=SURVIVAL}">?gamemode{gm=SURVIVAL} — режим выживания</option>
+      <option value="?world{w=world}">?world{w=world} — в определённом мире</option>
+      <option value="?biome{b=PLAINS}">?biome{b=PLAINS} — в определённом биоме</option>
+      <option value="?lightlevel{l=<8}">?lightlevel{l=<8} — уровень света ниже 8</option>
+      <option value="?mobsinrange{r=10;a=1}">?mobsinrange{r=10;a=1} — есть моб в 10 блоках</option>
+      <option value="?haspermission{p=some.perm}">?haspermission{p=...} — есть право</option>
+      <option value="?chance{c=0.5}">?chance{c=0.5} — шанс 50%</option>
+      <option value="?offgcd">?offgcd — глобальный кулдаун прошёл</option>
+      <option value="?!sneaking">?!sneaking — НЕ в присядке (отрицание)</option>
+    </select>
+
+    <label>Дополнительные условия вручную (через пробел)</label>
+    <input type="text" id="fExtraCond" placeholder="?ondamage ?haspotioneffect{type=REGENERATION}" oninput="update()">
+
+    <div style="margin-top:16px">
+      <button onclick="addSkill()">Добавить в Skills</button>
+      <button class="ghost" onclick="clearAll()">Очистить всё</button>
+    </div>
+
+    <h3 style="margin-top:22px">📜 Скиллы профиля (<span id="cnt">0</span>)</h3>
+    <div id="skillList"></div>
+    <div class="note" id="skillHint" style="display:none">
+      Пока нет ни одного скилла — заполните поля выше и нажмите «Добавить в Skills».
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>📄 Результат — plugins/MythicMobs/PassiveSkills/<span id="fileName" style="color:var(--warn)">passive.yml</span></h3>
+    <pre id="out"></pre>
+    <div style="margin-top:12px; display:flex; gap:10px">
+      <button onclick="copyYaml()">Копировать</button>
+      <button class="ghost" onclick="downloadYaml()">Скачать .yml</button>
+    </div>
+    <div class="note">
+      Скиллы, которые упоминаются в строках (например <code>skill{s=FireAura}</code>),
+      должны существовать в <code>plugins/MythicMobs/Skills/</code>.
+    </div>
+  </div>
+</div>
+
+<!-- ==================== ФОРМАТ ==================== -->
+<h2 id="format">Формат строки Skills</h2>
+<pre><механика>{параметры} <span class="k">@таргетер</span> <span class="k">~триггер</span> <span class="k">?условие</span> <span class="k">?условие{опции}</span> ...</pre>
+<div class="note">
+  Таймер встроен прямо в триггер: <code>~onTimer:40</code> = скилл срабатывает каждые 40 тиков (2 секунды).
+  Отдельное поле <code>Interval:</code> больше не обязательно — это старый формат, он всё ещё поддерживается.
+  Условий может быть несколько — все они проверяются MythicMobs перед выполнением.
+</div>
+<table>
+  <tr><th>Часть</th><th>Обязательна?</th><th>Описание</th></tr>
+  <tr><td><code>skill{s=FireAura}</code></td><td>да</td><td>Любая механика MythicMobs: skill, damage, potion, particle и т.д.</td></tr>
+  <tr><td><code>@self</code></td><td>нет</td><td>Таргетер. По умолчанию цель — сам игрок.</td></tr>
+  <tr><td><code>~onTimer:40</code></td><td>нет</td><td>Триггер. Без него используется триггер профиля или interval.</td></tr>
+  <tr><td><code>?health{h=>0}</code></td><td>нет</td><td>Условие MythicMobs, можно несколько подряд.</td></tr>
+</table>
+
+<!-- ==================== ТРИГГЕРЫ ==================== -->
+<h2 id="triggers">Все триггеры</h2>
+<div class="panel">
+  <h3>Кнопки и клавиши</h3>
+  <div>
+    <span class="tag">~onPressF</span><span class="tag">~onSwapHands</span><span class="tag">~onSwap</span>
+    <span class="tag">~onPressQ</span><span class="tag">~onDrop</span><span class="tag">~onDropItem</span>
+    <span class="tag">~onPressE</span><span class="tag">~onOpenInventory</span>
+    <span class="tag">~onPressT</span><span class="tag">~onChat</span>
+    <span class="tag">~onPress1</span>…<span class="tag">~onPress9</span><span class="tag">~onHotbar</span><span class="tag">~onHotbarSlot</span>
+  </div>
+  <div class="note">Все алиасы взаимозаменяемы: <code>~onSwapHands</code> = <code>~onPressF</code>. Регистр не важен.
+    <br>Эффект свапа отменяется, только если F используется способностью (пассивкой или
+    <code>onPressF</code> предмета) — иначе свап остаётся ванильным.</div>
+
+  <h3>Клики мышью</h3>
+  <div>
+    <span class="tag">~onLeftClick</span><span class="tag">~onPressLeft</span><span class="tag">~onPrimaryClick</span>
+    <span class="tag">~onRightClick</span><span class="tag">~onPressRight</span>
+    <span class="tag">~onOffhandClick</span><span class="tag">~onInteractOffhand</span>
+    <span class="tag">~onInteract</span>
+  </div>
+  <div class="note warn">
+    Ограничение Minecraft-клиента:
+    <code>~onLeftClick</code> срабатывает по воздуху даже с пустой рукой,<br>
+    а <code>~onRightClick</code> и <code>~onPressQ</code> с пустой рукой клиент молча не шлёт на сервер —
+    им нужен хоть какой-то предмет в руке. Для абилок «на кнопку без предметов»
+    используйте <code>~onPressF</code> или <code>~onPress1..9</code> — они работают всегда.
+  </div>
+
+  <div class="note">
+    <b>Совместимость с MythicCrucible.</b> Если у предмета в руке есть своя способность
+    на тот же клик (<code>onLeftClick</code>, <code>onPressF</code>, <code>onUse</code>)
+    — её запускает MythicCrucible, и пассивка по умолчанию работает параллельно с ней
+    (<code>passive-routing.item-triggers: true</code> в <code>config.yml</code>).
+    Поставьте <code>false</code>, если при конфликте побеждать должен предмет.
+    Без предмета в руках пассивки работают всегда.
+    Триггеры Crucible аддон никогда не перезаписывает: для своих пассивок
+    есть имена <code>~onLeftClickPassive</code>, <code>~onPrimaryClick</code> и т.д.
+  </div>
+
+  <h3>Бой</h3>
+  <div>
+    <span class="tag">~onAttack</span><span class="tag">~onHit</span>
+    <span class="tag">~onDamaged</span><span class="tag">~onHurt</span>
+    <span class="tag">~onKill</span><span class="tag">~onDeath</span>
+    <span class="tag">~onShoot</span><span class="tag">~onBow</span><span class="tag">~onBowShot</span>
+    <span class="tag">~onThrow</span><span class="tag">~onProjectile</span>
+  </div>
+
+  <h3>Движение</h3>
+  <div>
+    <span class="tag">~onSneak</span><span class="tag">~onCrouch</span>
+    <span class="tag">~onUnsneak</span><span class="tag">~onStandUp</span>
+    <span class="tag">~onJump</span><span class="tag">~onPressSpace</span><span class="tag">~onSpace</span>
+    <span class="tag">~onSprintStart</span><span class="tag">~onSprint</span>
+    <span class="tag">~onSprintStop</span><span class="tag">~onSprintEnd</span>
+  </div>
+  <div class="note">
+    <code>~onJump</code> = <code>~onPressSpace</code> — пробел. Пример «прыжок во время бега»:
+    <code>skill{s=X} @self ~onPressSpace ?sprinting</code>
+    <br><code>~onJump</code> требует Paper (событие <code>PlayerJumpEvent</code>);
+    <code>~onPressSpace</code> работает и на Spigot.
+  </div>
+
+  <h3>Предметы (стиль MythicCrucible)</h3>
+  <div>
+    <span class="tag">~onEquip</span><span class="tag">~onEquipArmor</span>
+    <span class="tag">~onUnequip</span><span class="tag">~onArmorUnequip</span>
+    <span class="tag">~onPickup</span><span class="tag">~onPickupItem</span><span class="tag">~onCollect</span>
+    <span class="tag">~onHold</span><span class="tag">~onHolding</span>
+  </div>
+  <div class="note warn"><code>~onEquip/Unequip</code> требуют Paper (событие PlayerArmorChangeEvent). На Spigot они отключены, остальные работают.</div>
+
+  <h3>Мир и прочее</h3>
+  <div>
+    <span class="tag">~onBlockBreak</span><span class="tag">~onMine</span>
+    <span class="tag">~onBlockPlace</span>
+    <span class="tag">~onConsume</span><span class="tag">~onEat</span><span class="tag">~onDrink</span>
+    <span class="tag">~onFish</span>
+    <span class="tag">~onHeal</span><span class="tag">~onRegen</span>
+    <span class="tag">~onPortal</span><span class="tag">~onPortalEnter</span>
+    <span class="tag">~onTeleport</span><span class="tag">~onTp</span>
+    <span class="tag">~onWorldChange</span><span class="tag">~onChangeWorld</span>
+    <span class="tag">~onRespawn</span>
+  </div>
+
+  <h3>Таймер</h3>
+  <div>
+    <span class="tag">~onTimer:40</span><span class="tag">~onInterval:40</span><span class="tag">~onTick:40</span>
+  </div>
+  <div class="note">Число после двоеточия — период в тиках. 20 тиков = 1 секунда.
+    Без двоеточия (<code>~onTimer</code>) строка всё равно загрузится и возьмёт
+    <code>Interval:</code> профиля (по умолчанию 20), но в логе будет предупреждение.</div>
+
+  <h3>Зарезервированные имена</h3>
+  <div class="note warn">
+    Имена <code>~onUse</code>, <code>~onLeftClick</code>, <code>~onPress_F</code>, <code>~onBreak</code>,
+    <code>~onPickup</code>, <code>~onAttack</code>, <code>~onBow</code> принадлежат MythicMobs и MythicCrucible.
+    Аддон их <b>понимает</b>, но <b>не регистрирует</b> под своим именем в MythicMobs — иначе
+    способности предметов перестали бы работать. В конфликте побеждает предмет:
+    пассивка на тот же клик у этого предмета не дублируется.
+  </div>
+</div>
+
+<!-- ==================== УСЛОВИЯ ==================== -->
+<h2 id="conditions">Популярные условия</h2>
+<div class="panel">
+<table>
+  <tr><th>Условие</th><th>Описание</th></tr>
+  <tr><td><code>?health{h=>10}</code></td><td>здоровья больше 10 (можно <code><</code>, <code>=</code>)</td></tr>
+  <tr><td><code>?food{f=>10}</code></td><td>сытость больше 10</td></tr>
+  <tr><td><code>?sneaking</code></td><td>игрок приседает</td></tr>
+  <tr><td><code>?sprinting</code></td><td>игрок бежит</td></tr>
+  <tr><td><code>?onground</code></td><td>стоит на земле</td></tr>
+  <tr><td><code>?inwater</code></td><td>находится в воде</td></tr>
+  <tr><td><code>?holding{t=DIAMOND_SWORD}</code></td><td>держит предмет в руке</td></tr>
+  <tr><td><code>?wearing{slot=HEAD;t=DIAMOND_HELMET}</code></td><td>надета броня в слот</td></tr>
+  <tr><td><code>?gamemode{gm=SURVIVAL}</code></td><td>игровой режим</td></tr>
+  <tr><td><code>?world{w=world}</code></td><td>находится в мире</td></tr>
+  <tr><td><code>?biome{b=PLAINS}</code></td><td>в биоме</td></tr>
+  <tr><td><code>?lightlevel{l=<8}</code></td><td>уровень света</td></tr>
+  <tr><td><code>?mobsinrange{r=10;a=1}</code></td><td>есть мобы в радиусе</td></tr>
+  <tr><td><code>?haspermission{p=some.perm}</code></td><td>есть permission</td></tr>
+  <tr><td><code>?chance{c=0.5}</code></td><td>сработает с шансом 50%</td></tr>
+  <tr><td><code>?offgcd</code></td><td>глобальный кулдаун MythicMobs прошёл</td></tr>
+</table>
+<div class="note">Это условия самого MythicMobs — полный список в его документации. Поддерживаются любые, включая аддоны (VariableSkills, переменные <code>?variable{...}</code> и т.д.).</div>
+<div class="note">
+  <b>Отрицание:</b> перед любым условием можно поставить <code>!</code> — например
+  <code>?!sneaking</code> («НЕ в присядке») или <code>?!holding{t=STONE}</code> («НЕ держит камень»).
+  Отрицание работает и в строке Skills, и в секции <code>Conditions:</code>.
+</div>
+</div>
+
+<!-- ==================== ТАРГЕТЕРЫ ==================== -->
+<h2 id="targets">Частые таргетеры</h2>
+<div class="panel">
+<table>
+  <tr><th>Таргетер</th><th>Куда применить</th></tr>
+  <tr><td><code>@self</code></td><td>сам игрок</td></tr>
+  <tr><td><code>@trigger</code></td><td>сущность-контекст события (кого ударил, кто ударил, кого убил…)</td></tr>
+  <tr><td><code>@selflocation</code></td><td>локация игрока (частицы, эффекты)</td></tr>
+  <tr><td><code>@forward{f=3}</code></td><td>точка в 3 блоках перед игроком</td></tr>
+  <tr><td><code>@playersinradius{r=5}</code></td><td>игроки в радиусе 5</td></tr>
+  <tr><td><code>@mobsinradius{r=5}</code></td><td>живые мобы в радиусе 5</td></tr>
+  <tr><td><code>@entitiesinradius{r=5}</code></td><td>все сущности в радиусе 5</td></tr>
+  <tr><td><code>@ring{r=4;points=8}</code></td><td>кольцо из точек вокруг игрока</td></tr>
+</table>
+</div>
+
+<!-- ==================== ПРИМЕРЫ ==================== -->
+<h2 id="example">Готовые примеры</h2>
+<div class="grid">
+<div class="panel">
+  <h3>Огненная аура на таймере</h3>
+  <pre>PassiveSkills:
+  fire_aura:
+    Enabled: true
+    Permission: mythicpassives.aura
+    Skills:
+      - "skill{s=FireAura} @self ~onTimer:40 ?health{h=>0}"</pre>
+</div>
+<div class="panel">
+  <h3>Тычка на F (свап рук)</h3>
+  <pre>PassiveSkills:
+  swap_strike:
+    Enabled: true
+    Permission: mythicpassives.swap
+    Skills:
+      - "damage{amount=4} @trigger ~onPressF ?holding{t=DIAMOND_SWORD}"</pre>
+</div>
+<div class="panel">
+  <h3>Абилка на F только стоя (не в присядке)</h3>
+  <pre>PassiveSkills:
+  race_f_ability:
+    Enabled: true
+    Permission: race.dwarf
+    Skills:
+      - "skill{s=cloud_slash_1} @trigger ~onPressF ?!sneaking"</pre>
+</div>
+<div class="panel">
+  <h3>Прыжок во время бега</h3>
+  <pre>PassiveSkills:
+  sprint_leap:
+    Enabled: true
+    Permission: mythicpassives.leap
+    Skills:
+      - "skill{s=SprintLeap} @self ~onPressSpace ?sprinting"</pre>
+</div>
+<div class="panel">
+  <h3>Скорость при приседании</h3>
+  <pre>PassiveSkills:
+  sneak_speed:
+    Enabled: true
+    Permission: mythicpassives.sneak
+    Skills:
+      - "potion{type=SPEED;duration=60;level=2} @self ~onSneak"</pre>
+</div>
+<div class="panel">
+  <h3>Несколько скиллов в одном профиле</h3>
+  <pre>PassiveSkills:
+  hybrid:
+    Enabled: true
+    Permission: mythicpassives.hybrid
+    Skills:
+      - "skill{s=RegenAura} @self ~onTimer:100"
+      - "skill{s=SneakBurst} @self ~onSneak ?chance{c=0.3}"
+      - "effect{d=1} @trigger ~onAttack"</pre>
+</div>
+<div class="panel">
+  <h3>Раса: таймер + прыжок + F в воздухе</h3>
+  <pre>PassiveSkills:
+  race_aviane:
+    Enabled: true
+    Permission: race.Aviane
+    Skills:
+      - "skill{skill=sneak_aviane_passive} @self ~onTimer:20 ?sneaking ?!onGround"
+      - "skill{skill=jump_aviane_passive} @self ~onJump ?sneaking"
+      - "skill{skill=jump_inair_aviane_passive} @self ~onPressF ?!onGround"</pre>
+  <div class="note">Три разных механизма — таймер, Paper-событие прыжка и свап рук.</div>
+</div>
+</div>
+
+<!-- ==================== НАСТРОЙКИ ==================== -->
+<h2 id="config">Настройки (config.yml)</h2>
+<div class="panel">
+  <h3>settings</h3>
+  <table>
+    <tr><th>Ключ</th><th>По умолчанию</th><th>Описание</th></tr>
+    <tr><td><code>permission-refresh-ticks</code></td><td>40</td><td>как часто перепроверять права; 0 — выкл.</td></tr>
+    <tr><td><code>recheck-permission-each-tick</code></td><td>true</td><td>проверять право перед каждым тиком ауры</td></tr>
+    <tr><td><code>debug</code></td><td>false</td><td>подробные сообщения о каждом срабатывании</td></tr>
+  </table>
+
+  <h3 style="margin-top:20px">passive-routing</h3>
+  <table>
+    <tr><th>Ключ</th><th>По умолчанию</th><th>Описание</th></tr>
+    <tr><td><code>item-triggers</code></td><td>true</td><td><b>true</b> — пассивка и предмет MythicCrucible работают параллельно;
+      <b>false</b> — если у предмета в руке есть скилл на этот клик, пассивка его не дублирует</td></tr>
+    <tr><td><code>item-use-click</code></td><td>true</td><td>ПКМ у предмета с <code>onUse</code> — один запуск вместо двух</td></tr>
+    <tr><td><code>cancel-swap-hands</code></td><td>true</td><td>F гасится, только если F — кнопка способности</td></tr>
+    <tr><td><code>resolve-item-use-loop</code></td><td>true</td><td>не даёт Crucible запустить способность предмета повторно</td></tr>
+    <tr><td><code>refresh-ticks</code></td><td>200</td><td>перечитывание предметов и их триггеров</td></tr>
+  </table>
+  <div class="note warn">Настройки применяются после <code>/passive reload</code> или перезапуска.
+    Без предмета в руках пассивки работают всегда — проверки предмета выполняются только
+    при Mythic-предмете.</div>
+</div>
+
+<!-- ==================== ДИАГНОСТИКА ==================== -->
+<h2 id="debug">Если не работает</h2>
+<div class="panel">
+  <table>
+    <tr><th>В логе</th><th>Значит</th><th>Что делать</th></tr>
+    <tr><td><code>Неизвестный триггер '~onX'</code></td><td>опечатка или неподдерживаемое имя</td>
+      <td>сверьте с таблицей триггеров выше</td></tr>
+    <tr><td><code>У '~onTimer' нет интервала</code></td><td>написали <code>~onTimer</code> без <code>:N</code></td>
+      <td>используйте <code>~onTimer:20</code> (20 тиков = 1 сек)</td></tr>
+    <tr><td><code>Условия пассивки X не выполнены</code></td><td>не прошли <code>?</code>-условия</td>
+      <td>проверьте <code>?!onGround</code>, <code>?sneaking</code></td></tr>
+    <tr><td><code>Пассивка X пропущена: триггер ведёт MythicCrucible</code></td><td>у предмета в руке есть скилл на этот клик</td>
+      <td>уберите предмет или <code>item-triggers: true</code></td></tr>
+    <tr><td><code>Загружено пассивных навыков: 0</code></td><td>файл не разобрался</td>
+      <td>смотрите предупреждения выше в логе</td></tr>
+    <tr><td><code>Профиль X пропущен: не указан Skills</code></td><td>секция <code>Skills:</code> пустая или не список</td>
+      <td>строками должны быть элементы <code>- "..."</code></td></tr>
+  </table>
+  <div class="note">Включите <code>settings.debug: true</code> — в консоль будет писаться каждое действие
+    (выполнено / отклонено условиями) и каждый пропуск по маршрутизации.</div>
+  <div class="note warn">Проверять пассивки нужно <b>без</b> Mythic-предмета в руке — иначе конфликт триггеров
+    может их заглушить. И после правок конфига MythicMobs: <code>/mm reload</code>, потом <code>/passive reload</code>.</div>
+</div>
+
+<!-- ==================== КОМАНДЫ ==================== -->
+<h2 id="commands">Команды</h2>
+<div class="panel">
+<table>
+  <tr><th>Команда</th><th>Описание</th></tr>
+  <tr><td><code>/passive reload</code></td><td>перезагрузить профили из PassiveSkills</td></tr>
+  <tr><td><code>/passive list</code></td><td>список всех профилей</td></tr>
+  <tr><td><code>/passive info <id|ник></code></td><td>информация о профиле / пассивки игрока</td></tr>
+  <tr><td><code>/passive player <ник></code></td><td>активные пассивки игрока</td></tr>
+</table>
+<div class="note">Право администратора: <code>mythicpassiveskills.admin</code>. Файлы лежат в <code>plugins/MythicMobs/PassiveSkills/*.yml</code>.<br>
+Настройки совместимости с MythicCrucible — секция <code>passive-routing</code> в <code>plugins/MythicPassiveSkills/config.yml</code>.</div>
+</div>
+
+<div class="toast" id="toast">Скопировано!</div>
+</div>
+
+<script>
+const skills = [];
+
+function el(id) { return document.getElementById(id); }
+
+function buildLine() {
+  const mech = el('fMechanic').value.trim();
+  if (!mech) return '';
+  let line = mech;
+  const target = el('fTarget').value;
+  if (target) line += ' ' + target;
+  const trig = el('fTrigger').value;
+  if (trig) line += ' ~' + trig;
+  const cond = el('fCondition').value;
+  if (cond) line += ' ' + cond;
+  const extra = el('fExtraCond').value.trim();
+  if (extra) line += ' ' + extra;
+  return line;
+}
+
+function highlight(line) {
+  let html = line
+    .replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+  // условия
+  html = html.replace(/(\?[A-Za-z]+(?:\{[^}]*\})?)/g, '<i>$1</i>');
+  // триггер
+  html = html.replace(/(~[A-Za-z_]+(?::\d+)?)/g, '<b>$1</b>');
+  // таргетер
+  html = html.replace(/(@[A-Za-z]+(?:\{[^}]*\})?)/g, '<u>$1</u>');
+  return html;
+}
+
+function addSkill() {
+  const line = buildLine();
+  if (!line) { alert('Укажите хотя бы механику/скилл!'); return; }
+  skills.push(line);
+  el('fMechanic').value = '';
+  render();
+}
+
+function removeSkill(i) { skills.splice(i, 1); render(); }
+
+function clearAll() {
+  skills.length = 0;
+  el('fId').value = 'my_passive';
+  el('fFile').value = 'passive.yml';
+  el('fPerm').value = '';
+  el('fMechanic').value = '';
+  el('fExtraCond').value = '';
+  el('fEnabled').checked = true;
+  render();
+}
+
+function render() {
+  const list = el('skillList');
+  list.innerHTML = '';
+  skills.forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'skill-row';
+    row.innerHTML = '<div class="line">' + highlight(s) + '</div>'
+      + '<button class="del small" title="Удалить">✕</button>';
+    row.querySelector('button').onclick = () => removeSkill(i);
+    list.appendChild(row);
+  });
+  el('cnt').textContent = skills.length;
+  el('skillHint').style.display = skills.length ? 'none' : 'block';
+  update();
+}
+
+function update() {
+  const id = el('fId').value.trim() || 'my_passive';
+  const file = (el('fFile').value.trim() || 'passive.yml');
+  el('fileName').textContent = file;
+
+  const perm = el('fPerm').value.trim();
+  const enabled = el('fEnabled').checked;
+
+  let out = '';
+  if (el('fMechanic').value.trim()) {
+    out += '# <== несохранённая строка (нажмите "Добавить в Skills"):\n# ';
+    out += buildLine() + '\n\n';
+  }
+  out += '<span class="k">PassiveSkills:</span>\n';
+  out += '  <span class="k">' + esc(id) + ':</span>\n';
+  out += '    <span class="k">Enabled:</span> ' + enabled + '\n';
+  if (perm) out += '    <span class="k">Permission:</span> <span class="s">' + esc(perm) + '</span>\n';
+  out += '    <span class="k">Skills:</span>\n';
+  if (skills.length) {
+    for (const s of skills) out += '      - "<span class="s">' + esc(s) + '</span>"\n';
+  } else {
+    out += '      <span class="c"># добавьте скиллы слева</span>\n';
+  }
+  el('out').innerHTML = out;
+}
+
+function esc(s) {
+  return s.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+}
+
+function plainYaml() {
+  const id = el('fId').value.trim() || 'my_passive';
+  const perm = el('fPerm').value.trim();
+  let y = 'PassiveSkills:\n';
+  y += '  ' + id + ':\n';
+  y += '    Enabled: ' + el('fEnabled').checked + '\n';
+  if (perm) y += '    Permission: ' + perm + '\n';
+  y += '    Skills:\n';
+  for (const s of skills) y += '      - "' + s + '"\n';
+  return y;
+}
+
+function copyYaml() {
+  navigator.clipboard.writeText(plainYaml()).then(showToast);
+}
+
+function downloadYaml() {
+  const blob = new Blob([plainYaml()], { type: 'text/yaml' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = el('fFile').value.trim() || 'passive.yml';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function showToast() {
+  const t = el('toast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1500);
+}
+
+render();
+</script>
+</body>
+</html>
