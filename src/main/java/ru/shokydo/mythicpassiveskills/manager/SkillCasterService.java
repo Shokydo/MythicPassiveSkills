@@ -20,8 +20,10 @@ import ru.shokydo.mythicpassiveskills.config.PassiveProfile;
 import ru.shokydo.mythicpassiveskills.trigger.PassiveTrigger;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Level;
@@ -39,8 +41,13 @@ import java.util.logging.Level;
  */
 public final class SkillCasterService {
 
+    /**\u041a\u0430\u043a \u0447\u0430\u0441\u0442\u043e (\u043c\u0441) \u043f\u043e\u0432\u0442\u043e\u0440\u044f\u0442\u044c \u043e\u0434\u043d\u043e \u0438 \u0442\u043e \u0436\u0435 debug-\u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435. */
+    private static final long DEBUG_REPEAT_MS = 5000L;
+
     private final MythicPassiveSkillsPlugin plugin;
     private final Set<String> warnedMissingSkills = new HashSet<>();
+    /** \u041a\u043b\u044e\u0447 \u2192 \u0432\u0440\u0435\u043c\u044f \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0435\u0433\u043e \u043e\u0434\u0438\u043d\u0430\u043a\u043e\u0432\u043e\u0433\u043e debug-\u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u044f. */
+    private final Map<String, Long> debugOnceAt = new HashMap<>();
 
     public SkillCasterService(MythicPassiveSkillsPlugin plugin) {
         this.plugin = plugin;
@@ -121,7 +128,16 @@ public final class SkillCasterService {
         }
 
         if (!inRange) {
-            plugin.debug("Условия пассивки " + profile.id() + " не выполнены у " + player.getName());
+            // Interval-строки проверяются 20 раз в секунду: без ограничения лог
+            // превращается в шум, за которым не видно ничего другого.
+            String key = "cond|" + player.getUniqueId() + "|" + profile.id();
+            long now = System.currentTimeMillis();
+            Long last = debugOnceAt.get(key);
+            if (last == null || now - last > DEBUG_REPEAT_MS) {
+                debugOnceAt.put(key, now);
+                plugin.debug("Условия пассивки " + profile.id() + " не выполнены у " + player.getName()
+                        + " (дальше повтор этого сообщения — раз в " + (DEBUG_REPEAT_MS / 1000) + " с)");
+            }
             return false;
         }
 

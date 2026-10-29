@@ -209,20 +209,6 @@ public final class PassiveManager {
         }
 
         fireLifecycle(player, PassiveTrigger.START, profile);
-        markActive(player, profile);
-    }
-
-    /**
-     * Поминает строки с условиями как «сейчас выполняются»: после
-     * перезапуска инстанса мы не знаем, работали ли они — пусть первая же
-     * проверка решает сама.
-     */
-    private void markActive(Player player, PassiveProfile profile) {
-        for (PassiveAction action : profile.actions()) {
-            if (action.hasConditions()) {
-                activity.put(activityKey(player.getUniqueId(), profile.id(), action), Boolean.TRUE);
-            }
-        }
     }
 
     /**
@@ -282,6 +268,9 @@ public final class PassiveManager {
                         && profile.id().equals(changedId) && !isSharedHandler(profile, trigger)) {
                     continue;
                 }
+
+                plugin.debug("Триггер " + trigger.name() + " для " + changedId + ": строка '"
+                        + action.line() + "' (профиль " + profile.id() + ")");
                 cast(player, profile, action, null, false);
             }
         }
@@ -358,6 +347,9 @@ public final class PassiveManager {
         }
 
         String id = profile.id();
+        plugin.debug("Пассивка " + id + " " + (now ? "начала" : "перестала")
+                + " выполняться у " + player.getName() + " — "
+                + (now ? "~onStartPassive" : "~onEndPassive"));
         fireLifecycle(player, now ? PassiveTrigger.START : PassiveTrigger.END, profile, id);
     }
 
