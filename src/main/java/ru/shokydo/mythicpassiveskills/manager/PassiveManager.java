@@ -45,6 +45,19 @@ public final class PassiveManager {
      */
     private final Set<String> casting = new HashSet<>();
 
+    /**
+     * Состояние повторяющихся строк ({@code ~onTimer}, {@code ~onSneak}…): ключ
+     * {@code uuid|profileId|строка} → строка сейчас работает (условия проходят).
+     * <p>
+     * Нужно, чтобы вызвать {@code ~onEndPassive}, когда условие перестало
+     * выполняться (встал на землю, вышел из присяда), а не только когда
+     * выключился весь профиль или тик шёл без каста.
+     */
+    private final Map<String, Boolean> activity = new HashMap<>();
+
+    /** {@code true}, пока выполняются строки {@code ~onStartPassive}/{@code ~onEndPassive}. */
+    private boolean inLifecycle;
+
     public PassiveManager(MythicPassiveSkillsPlugin plugin) {
         this.plugin = plugin;
         this.caster = new SkillCasterService(plugin);
@@ -196,6 +209,20 @@ public final class PassiveManager {
         }
 
         fireLifecycle(player, PassiveTrigger.START, profile);
+        markActive(player, profile);
+    }
+
+    /**
+     * Поминает строки с условиями как «сейчас выполняются»: после
+     * перезапуска инстанса мы не знаем, работали ли они — пусть первая же
+     * проверка решает сама.
+     */
+    private void markActive(Player player, PassiveProfile profile) {
+        for (PassiveAction action : profile.actions()) {
+            if (action.hasConditions()) {
+                activity.put(activityKey(player.getUniqueId(), profile.id(), action), Boolean.TRUE);
+            }
+        }
     }
 
     /**
@@ -209,6 +236,14 @@ public final class PassiveManager {
      * @param changed профиль, который включился/выключился
      */
     private void fireLifecycle(Player player, PassiveTrigger trigger, PassiveProfile changed) {
+        fireLifecycle(player, trigger, changed, changed.id());
+    }
+
+    /**
+     * @param changedId ID пассивки для фильтра {@code ?passive=<id>}
+     */
+    private void fireLifecycle(Player player, PassiveTrigger trigger, PassiveProfile changed,
+                               String changedId) {
         if (player == null || !player.isOnline()) {
             return;
         }
@@ -218,7 +253,17 @@ public final class PassiveManager {
             return;
         }
 
-        String changedId = changed.id();
+        boolean previous = inLifecycle;
+        inLifecycle = true;
+        try {
+            fireLifecycle0(player, trigger, changed, changedId, map);
+        } finally {
+            inLifecycle = previous;
+        }
+    }
+
+    private void fireLifecycle0(Player player, PassiveTrigger trigger, PassiveProfile changed,
+                                String changedId, Map<String, ActivePassive> map) {
         List<ActivePassive> snapshot = new ArrayList<>(map.values());
         for (ActivePassive passive : snapshot) {
             PassiveProfile profile = passive.profile();
@@ -272,8 +317,51 @@ public final class PassiveManager {
             return;
         }
 
-        cast(player, profile, action, null, false);
+        if (cast(player, profile, action, null, false)) {
+            updateActivity(player, profile, action, true);
+        } else {
+            updateActivity(player, profile, action, false);
+        }
     }
+
+    private String activityKey(UUID uuid, String profileId, PassiveAction action) {
+        return uuid + "|" + profileId + "|" + Integer.toHexString(action.line().hashCode());
+    }
+
+    /**
+     * Следит за "жизнью" повторяющейся строки пассивки.
+     * <p>
+     * Строка с условиями ({@code ~onTimer:1 ?sneaking ?!onGround}) считается
+     * работающей, пока условия проходят. Переход работала → не работает даёт
+     * {@code ~onEndPassive}, обратный переход — {@code ~onStartPassive}.
+     * Так {@code setSkillCooldown ... ~onEndPassive} кладёт кулдаун ровно в момент,
+     * когда игрок отпустил присяд или приземлился.
+     *
+     * @param now {@code true} — действие только что выполнилось
+     */
+    private void updateActivity(Player player, PassiveProfile profile,
+                                PassiveAction action, boolean now) {
+        // Строка без условий повторяется всегда: перехода нет, событие не нужно.
+        // Пока идёт обработчик ~onStartPassive/~onEndPassive, переходы не отслеживаем —
+        // иначе обработчик, сам повторяющийся по таймеру, запускал бы себя по кругу.
+        if (!action.hasConditions() || inLifecycle) {
+            return;
+        }
+
+        String key = activityKey(player.getUniqueId(), profile.id(), action);
+        Boolean before = activity.put(key, now);
+        if (before == null) {
+            return;
+        }
+        if (before == now) {
+            return;
+        }
+
+        String id = profile.id();
+        fireLifecycle(player, now ? PassiveTrigger.START : PassiveTrigger.END, profile, id);
+    }
+
+
 
     /**
      * Вызывает все действия активных пассивок игрока с указанным триггером.
@@ -344,15 +432,21 @@ public final class PassiveManager {
                     boolean suppress = !sources.itemHasTrigger(id, trigger.name());
                     if (cast(player, profile, action, context, suppress)) {
                         anyCast = true;
+                        updateActivity(player, profile, action, true);
                         if (suppress) {
                             sources.markServed(player, id, trigger);
                         }
+                    } else {
+                        updateActivity(player, profile, action, false);
                     }
                     continue;
                 }
 
                 if (cast(player, profile, action, context, false)) {
                     anyCast = true;
+                    updateActivity(player, profile, action, true);
+                } else {
+                    updateActivity(player, profile, action, false);
                 }
             }
         }
@@ -429,6 +523,7 @@ public final class PassiveManager {
                 fireLifecycle(player, PassiveTrigger.END, passive.profile());
             }
         }
+        activity.keySet().removeIf(key -> key.startsWith(uuid + "|"));
     }
 
     /**
@@ -455,6 +550,7 @@ public final class PassiveManager {
     public void shutdown() {
         clearAll();
         casting.clear();
+        activity.clear();
     }
 
     private void clearAll() {
@@ -464,6 +560,7 @@ public final class PassiveManager {
             }
         }
         active.clear();
+        activity.clear();
     }
 
     private ActivePassive getActive(UUID uuid, String profileId) {
@@ -480,6 +577,10 @@ public final class PassiveManager {
         ActivePassive passive = map.remove(profileId);
         if (passive != null) {
             passive.cancel();
+
+            // Состояние «строка работает» этого профиля больше не нужно.
+            String prefix = uuid + "|" + profileId + "|";
+            activity.keySet().removeIf(key -> key.startsWith(prefix));
 
             // ~onEndPassive: профиль ещё в map у других пассивок, поэтому
             // обработчики конца видят остальные активные профили игрока.

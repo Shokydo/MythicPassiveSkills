@@ -217,6 +217,15 @@ public final class PassiveAction {
     }
 
     /**
+     * @return {@code true}, если у строки есть условия ({@code ?sneaking}, {@code ?!onGround}…).
+     *         Только такие строки могут «начаться» и «закончиться» самостоятельно —
+     *         при смене результата условий для {@code ~onStartPassive}/{@code ~onEndPassive}.
+     */
+    public boolean hasConditions() {
+        return !conditions.isEmpty();
+    }
+
+    /**
      * {@code true} — действие является именем скилла старого формата.
      */
     public boolean isLegacy() {
