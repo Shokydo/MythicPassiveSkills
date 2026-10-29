@@ -261,13 +261,6 @@ public final class PassiveManager {
                 if (action.trigger() != trigger || !action.matchesPassive(changedId)) {
                     continue;
                 }
-                // Действие самой выключаемой пассивки уже остановлено — не кастуем.
-                // Другие пассивки игрока и общие обработчики (~onEndPassive без
-                // ?passive=...) получают событие обычно.
-                if (trigger == PassiveTrigger.END && !passive.mechanic()
-                        && profile.id().equals(changedId) && !isSharedHandler(profile, trigger)) {
-                    continue;
-                }
 
                 plugin.debug("Триггер " + trigger.name() + " для " + changedId + ": строка '"
                         + action.line() + "' (профиль " + profile.id() + ")");
@@ -448,19 +441,6 @@ public final class PassiveManager {
 
     public boolean fire(Player player, PassiveTrigger trigger, Entity context) {
         return fire(player, trigger, context, null);
-    }
-
-    /**
-     * @return {@code true}, если в профиле есть строки этого триггера без
-     *         {@code ?passive=...} — то есть он обслуживает все пассивки
-     */
-    private boolean isSharedHandler(PassiveProfile profile, PassiveTrigger trigger) {
-        for (PassiveAction action : profile.actions()) {
-            if (action.trigger() == trigger && action.getPassiveFilter() == null) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
