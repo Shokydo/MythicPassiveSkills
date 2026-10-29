@@ -81,7 +81,7 @@ public final class PassiveActionFactory {
         int interval = fallbackInterval;
         Matcher matcher = TRIGGER_PATTERN.matcher(line);
         if (matcher.find()) {
-            PassiveTrigger parsed = PassiveTrigger.parse(matcher.group(1));
+            PassiveTrigger parsed = PassiveTrigger.parseExact(matcher.group(1));
             if (parsed == null) {
                 plugin.getLogger().warning("Неизвестный триггер '~" + matcher.group(1)
                         + "' в строке пассивки: " + line);
@@ -112,15 +112,26 @@ public final class PassiveActionFactory {
         List<String> tokens = splitTokens(line);
         List<String> mechanicTokens = new ArrayList<>();
         List<String> inlineConditions = new ArrayList<>();
+        String passiveFilter = null;
         for (String token : tokens) {
             if (token.startsWith("~")) {
                 continue;
             }
             if (token.startsWith("?")) {
                 String condition = token.substring(1).trim();
-                if (!condition.isEmpty()) {
-                    inlineConditions.add(condition);
+                if (condition.isEmpty()) {
+                    continue;
                 }
+
+                // ?passive=<id> — не условие MythicMobs, а фильтр строки
+                // ~onStartPassive / ~onEndPassive: выполнить только для этой пассивки.
+                String bare = condition.startsWith("!") ? condition.substring(1).trim() : condition;
+                if (bare.toLowerCase(java.util.Locale.ROOT).startsWith("passive=")) {
+                    passiveFilter = bare.substring("passive=".length()).trim();
+                    continue;
+                }
+
+                inlineConditions.add(condition);
                 continue;
             }
             mechanicTokens.add(token);
@@ -165,7 +176,7 @@ public final class PassiveActionFactory {
             MetaSkill skill = new MetaSkill(executor, safeFile(file), List.of(mechanicPart));
             skill.setInlineSkill(true);
             return PassiveAction.compiled(line, trigger, Math.max(1, interval),
-                    skill, trigger.skillTrigger(), conditions, routing);
+                    skill, trigger.skillTrigger(), conditions, routing).withPassiveFilter(passiveFilter);
         } catch (Throwable throwable) {
             plugin.getLogger().log(Level.WARNING,
                     "Не удалось разобрать строку пассивки: " + line, throwable);

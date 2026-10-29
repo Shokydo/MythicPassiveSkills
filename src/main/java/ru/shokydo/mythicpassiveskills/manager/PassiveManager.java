@@ -194,6 +194,52 @@ public final class PassiveManager {
                     () -> intervalTick(uuid, profile.id(), action), interval, interval);
             passive.addTask(task);
         }
+
+        fireLifecycle(player, PassiveTrigger.START, profile);
+    }
+
+    /**
+     * Выполняет строки {@code ~onStartPassive} / {@code ~onEndPassive}, которые
+     * относятся к указанной пассивке (или ко всем, если фильтр не задан).
+     * <p>
+     * Строки жизни пассивки ищутся во всех активных профилях игрока: типичный
+     * сценарий — одна пассивка управляет другой
+     * ({@code cooldown{s=Fireball} ... ~onEndPassive ?passive=sneak_levitation}).
+     *
+     * @param changed профиль, который включился/выключился
+     */
+    private void fireLifecycle(Player player, PassiveTrigger trigger, PassiveProfile changed) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+
+        Map<String, ActivePassive> map = active.get(player.getUniqueId());
+        if (map == null || map.isEmpty()) {
+            return;
+        }
+
+        String changedId = changed.id();
+        List<ActivePassive> snapshot = new ArrayList<>(map.values());
+        for (ActivePassive passive : snapshot) {
+            PassiveProfile profile = passive.profile();
+            if (!profile.enabled() || !profile.isGranted(player)) {
+                continue;
+            }
+
+            for (PassiveAction action : profile.actions()) {
+                if (action.trigger() != trigger || !action.matchesPassive(changedId)) {
+                    continue;
+                }
+                // Действие самой выключаемой пассивки уже остановлено — не кастуем.
+                // Другие пассивки игрока и общие обработчики (~onEndPassive без
+                // ?passive=...) получают событие обычно.
+                if (trigger == PassiveTrigger.END && !passive.mechanic()
+                        && profile.id().equals(changedId) && !isSharedHandler(profile, trigger)) {
+                    continue;
+                }
+                cast(player, profile, action, null, false);
+            }
+        }
     }
 
     private void intervalTick(UUID uuid, String profileId, PassiveAction action) {
@@ -319,6 +365,19 @@ public final class PassiveManager {
     }
 
     /**
+     * @return {@code true}, если в профиле есть строки этого триггера без
+     *         {@code ?passive=...} — то есть он обслуживает все пассивки
+     */
+    private boolean isSharedHandler(PassiveProfile profile, PassiveTrigger trigger) {
+        for (PassiveAction action : profile.actions()) {
+            if (action.trigger() == trigger && action.getPassiveFilter() == null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * @return {@code true}, если у игрока есть активная пассивка на этом триггере
      */
     public boolean hasClickPassive(Player player, PassiveTrigger trigger) {
@@ -327,7 +386,7 @@ public final class PassiveManager {
             return false;
         }
         for (ActivePassive passive : map.values()) {
-            if (passive.profile().hasTrigger(trigger)) {
+            if (passive.profile().hasTrigger(trigger) && passive.profile().isGranted(player)) {
                 return true;
             }
         }
@@ -360,8 +419,15 @@ public final class PassiveManager {
         if (map == null) {
             return;
         }
+
+        Player player = Bukkit.getPlayer(uuid);
         for (ActivePassive passive : map.values()) {
             passive.cancel();
+
+            // Выход игрока: ~onEndPassive даёт шанс почистить его состояние.
+            if (player != null && player.isOnline()) {
+                fireLifecycle(player, PassiveTrigger.END, passive.profile());
+            }
         }
     }
 
@@ -383,6 +449,9 @@ public final class PassiveManager {
         }
     }
 
+    /**
+     * Останавливает всё без вызовов {@code ~onEndPassive} (перезагрузка профилей).
+     */
     public void shutdown() {
         clearAll();
         casting.clear();
@@ -411,7 +480,15 @@ public final class PassiveManager {
         ActivePassive passive = map.remove(profileId);
         if (passive != null) {
             passive.cancel();
+
+            // ~onEndPassive: профиль ещё в map у других пассивок, поэтому
+            // обработчики конца видят остальные активные профили игрока.
+            Player player = Bukkit.getPlayer(uuid);
+            if (player != null && player.isOnline()) {
+                fireLifecycle(player, PassiveTrigger.END, passive.profile());
+            }
         }
+
         if (map.isEmpty()) {
             active.remove(uuid);
         }

@@ -62,6 +62,30 @@ PassiveSkills:
   #   Skills:
   #     - "skill{s=ExamplePassivePressF} @self ~onPressF ?sneaking"
 
+  # ----------------------------------------------------------
+  #  Старт и конец пассивки: ~onStartPassive / ~onEndPassive
+  # ----------------------------------------------------------
+  #  Строки с этими триггерами выполняются в момент, когда пассивка
+  #  включилась или выключилась (а не по событию игрока).
+  #  Выключение — это снятие права, выход игрока, смена мира, /passive reload.
+  #
+  #  ?passive=<id> — сработать только для конкретной пассивки.
+  #  Без фильтра — для любой пассивки игрока.
+  #
+  #  ID пассивки — это `<имя_файла>:<ключ профиля>`,
+  #  например для example.yml и ключа sneak_levitation: example:sneak_levitation.
+  #
+  # example_levitation:
+  #   Permission: mythicpassives.levitation
+  #   Skills:
+  #     - "particle{particle=SPELL_WITCH} @self ~onStartPassive ?passive=example:example_levitation"
+  #     - "particle{particle=SMOKE} @self ~onEndPassive ?passive=example:example_levitation"
+  #
+  #  Общий обработчик конца для всех пассивок игрока:
+  # example_cooldown_on_end:
+  #   Skills:
+  #     - "cooldown{s=Fireball;seconds=5} @self ~onEndPassive"
+
   # Можно указать несколько прав: достаточно любого из них.
   # example_multi:
   #   Permissions:

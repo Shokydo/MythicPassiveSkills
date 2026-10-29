@@ -29,6 +29,11 @@ public final class PassiveAction {
     private final SkillTrigger skillTrigger;
     private final List<ConditionSpec> conditions;
     private final TriggerRouting routing;
+    /**
+     * ID пассивки из {@code ?passive=<id>} для {@code ~onStartPassive}/{@code ~onEndPassive}.
+     * {@code null} — сработать при включении/выключении любой пассивки игрока.
+     */
+    private final String passiveFilter;
 
     private PassiveAction(String line,
                           PassiveTrigger trigger,
@@ -37,7 +42,8 @@ public final class PassiveAction {
                           String skillName,
                           SkillTrigger skillTrigger,
                           List<ConditionSpec> conditions,
-                          TriggerRouting routing) {
+                          TriggerRouting routing,
+                          String passiveFilter) {
         this.line = line;
         this.trigger = trigger;
         this.interval = Math.max(1, interval);
@@ -46,6 +52,35 @@ public final class PassiveAction {
         this.skillTrigger = skillTrigger;
         this.conditions = List.copyOf(conditions);
         this.routing = routing == null ? TriggerRouting.ALL : routing;
+        this.passiveFilter = passiveFilter == null || passiveFilter.isBlank()
+                ? null
+                : passiveFilter.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /**
+     * @param passiveFilter {@code ?passive=<id>} — сработать только на старте/конце
+     *                      этой пассивки; {@code null} — на любой
+     * @return копия действия с фильтром по ID пассивки
+     */
+    public PassiveAction withPassiveFilter(String passiveFilter) {
+        return new PassiveAction(line, trigger, interval, skill, skillName, skillTrigger,
+                conditions, routing, passiveFilter);
+    }
+
+    /**
+     * Проверяет, нужно ли выполнять действие на событии старта/конца пассивки.
+     *
+     * @param changedId ID пассивки, которая включилась/выключилась
+     */
+    public boolean matchesPassive(String changedId) {
+        if (passiveFilter == null) {
+            return true;
+        }
+        return changedId != null && getPassiveFilter().equals(changedId.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    public String getPassiveFilter() {
+        return passiveFilter;
     }
 
     /**
@@ -105,7 +140,7 @@ public final class PassiveAction {
                                          SkillTrigger skillTrigger,
                                          List<ConditionSpec> conditions,
                                          TriggerRouting routing) {
-        return new PassiveAction(line, trigger, interval, skill, null, skillTrigger, conditions, routing);
+        return new PassiveAction(line, trigger, interval, skill, null, skillTrigger, conditions, routing, null);
     }
 
     /**
@@ -117,7 +152,7 @@ public final class PassiveAction {
                                       SkillTrigger skillTrigger,
                                       List<ConditionSpec> conditions,
                                       TriggerRouting routing) {
-        return new PassiveAction(name, trigger, interval, null, name, skillTrigger, conditions, routing);
+        return new PassiveAction(name, trigger, interval, null, name, skillTrigger, conditions, routing, null);
     }
 
     /**

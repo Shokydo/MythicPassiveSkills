@@ -1,4 +1,4 @@
-# MythicPassiveSkills
+﻿# MythicPassiveSkills
 
 Аддон для **MythicMobs**, который даёт игрокам пассивные навыки, привязанные к permission-нодам.
 Пока у игрока есть право — пассивка работает; право сняли или игрок вышел — задача сразу останавливается.
@@ -30,7 +30,7 @@
 ## Установка
 
 1. Соберите плагин или возьмите готовый jar.
-2. Положите `MythicPassiveSkills-1.1.0.jar` в `plugins/`.
+2. Положите `MythicPassiveSkills-1.2.0.jar` в `plugins/`.
 3. Запустите сервер. Появится папка `plugins/MythicMobs/PassiveSkills/`
    с файлом `example.yml`.
 4. Создайте свои профили в `plugins/MythicMobs/PassiveSkills/*.yml`.
@@ -134,6 +134,38 @@ PassiveSkills:
 `~onSneakPassive`, `~onAttackPassive`, `~onDamagedPassive` и т.д.
 Для таймера можно писать `~onTimer:40`, `~onInterval:40` или `~onTick:40` —
 это одно и то же.
+
+### Старт и конец пассивки
+
+У пассивки нет одного общего «включилась» — каждая строка `Skills:` живёт
+своим триггером. Так что события старта и конца вешаются строками
+`~onStartPassive` / `~onEndPassive` в любом профиле игрока:
+
+```yaml
+PassiveSkills:
+  levitation:
+    Permission: mythicpassives.levitation
+    Skills:
+      - "lunge{} @self ~onTimer:1 ?sneaking ?!onGround"
+      - "particle{particle=SPELL_WITCH} @self ~onStartPassive ?passive=passive:levitation"
+      - "particle{particle=SMOKE} @self ~onEndPassive ?passive=passive:levitation"
+```
+
+| Триггер | Когда срабатывает |
+|---|---|
+| `~onStartPassive` | профиль активирован: вход в игру, выдача права |
+| `~onEndPassive` | профиль остановлен: снятие права, выход, смена мира |
+
+`?passive=<id>` — сработать только для этой пассивки. Без фильтра строка
+обрабатывает включение/выключение любой пассивки игрока (удобно для общих
+кулдаунов вида `cooldown{s=Fireball} @self ~onEndPassive`).
+
+ID пассивки — `<имя_файла>:<ключ профиля>`: для `example.yml` и ключа
+`levitation` это `example:levitation`.
+
+Строки `~onEndPassive` самой выключаемой пассивки не выполняются (она уже
+остановлена); обработчики из других профилей и общие строки получают событие
+до окончательного удаления профиля.
 
 ### Совместимость с MythicCrucible
 
@@ -249,7 +281,8 @@ ExampleSkill:
     - potion{type=SPEED;duration=100;level=1} @self ~onSneakPassive
 ```
 
-Основные имена: `PASSIVE_INTERVAL`, `PASSIVE_SNEAK`, `PASSIVE_UNSNEAK`,
+Основные имена: `PASSIVE_START`, `PASSIVE_END`, `PASSIVE_INTERVAL`,
+`PASSIVE_SNEAK`, `PASSIVE_UNSNEAK`,
 `PASSIVE_ATTACK`, `PASSIVE_DAMAGED`, `PASSIVE_JUMP`, `PASSIVE_KILL`,
 `PASSIVE_DEATH`, `PASSIVE_RESPAWN`, `PASSIVE_BLOCK_BREAK`,
 `PASSIVE_BLOCK_PLACE`, `PASSIVE_INTERACT`, `PASSIVE_SHOOT`,
@@ -295,7 +328,7 @@ mvn package
 mvn package -Dmythicmobs.jar="C:\path\to\MythicMobs.jar"
 ```
 
-Готовый файл: `target/MythicPassiveSkills-1.1.0.jar`.
+Готовый файл: `target/MythicPassiveSkills-1.2.0.jar`.
 
 ## Замечания
 

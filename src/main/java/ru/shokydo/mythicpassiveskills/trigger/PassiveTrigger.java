@@ -4,9 +4,11 @@ import io.lumine.mythic.api.skills.SkillTrigger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Триггеры пассивных навыков.
@@ -128,6 +130,22 @@ public enum PassiveTrigger {
          * Отдельное имя нужно для умолчания в предметах: их {@code onLeftClick}
          * обрабатывает MythicCrucible, и пассивка не должна его перекрывать.
          */
+        /**
+         * Пассивка включилась (профиль активирован для игрока).
+         * Строка: {@code particle{...} @self ~onStartPassive ?passive=sneak_levitation}
+         */
+        START("PASSIVE_START",
+                        "STARTPASSIVE", "PASSIVESTART", "ONPASSIVESTART",
+                        "ONSTARTPASSIVE", "ONSTART"),
+
+        /**
+         * Пассивка выключилась (снято право, смена мира, выход, {@code /passive reload}).
+         * Строка: {@code cooldown{s=Fireball} @self ~onEndPassive ?passive=sneak_levitation}
+         */
+        END("PASSIVE_END",
+                        "ENDPASSIVE", "PASSIVEEND", "ONPASSIVEEND",
+                        "ONENDPASSIVE", "ONEND"),
+
         PRIMARY_CLICK("PASSIVE_PRIMARY_CLICK",
                         "PRIMARYCLICKPASSIVE", "PASSIVEPRIMARYCLICK", "ONPRIMARYCLICKPASSIVE",
                         "PRIMARYCLICK", "ONPRIMARYCLICK", "LEFTPRESS", "ONLEFTPRESS",
@@ -285,7 +303,8 @@ public enum PassiveTrigger {
                 "ONTIMER", "TIMER", "ONTICK", "TICK",
                 "ONSWAP", "SWAP", "ONSWAPHANDS", "SWAPHANDS",
                 "ONCHAT", "CHAT",
-                "ONEQUIP", "EQUIP", "ONUNEQUIP", "UNEQUIP"
+                "ONEQUIP", "EQUIP", "ONUNEQUIP", "UNEQUIP",
+                "ONSTART", "START", "ONEND", "END"
         );
 
         /** Строки, которые разбираются, но в MythicMobs не регистрируются. */
@@ -386,6 +405,7 @@ public enum PassiveTrigger {
                 return triggerName;
         }
 
+        @SuppressWarnings("rawtypes")
         public SkillTrigger skillTrigger() {
                 return SkillTrigger.get(triggerName);
         }
@@ -397,6 +417,63 @@ public enum PassiveTrigger {
                 String name = normalize(raw);
                 PassiveTrigger trigger = BY_NAME.get(name);
                 return trigger != null ? trigger : BY_RESERVED.get(name);
+        }
+
+        /**
+         * Разбор триггера в строке пассивки.
+         * <p>
+         * Если за регистр в MythicMobs конкурируют два триггера аддона
+         * ({@code ~onStartPassive} → {@code ONSTARTPASSIVE}), то строка,
+         * написанная под один, не должна молча превращаться в другой.
+         * Здесь учитывается точное имя до нормализации.
+         *
+         * @return триггер или {@code null}, если имя неизвестно или неоднозначно
+         */
+        public static PassiveTrigger parseExact(String raw) {
+                if (raw == null || raw.isBlank()) {
+                        return INTERVAL;
+                }
+
+                String name = raw.trim();
+                if (name.startsWith("~")) {
+                        name = name.substring(1);
+                }
+                int colon = name.indexOf(':');
+                if (colon > 0) {
+                        name = name.substring(0, colon);
+                }
+
+                Set<PassiveTrigger> matches = new LinkedHashSet<>();
+                for (PassiveTrigger trigger : values()) {
+                        if (trigger.triggerName.equalsIgnoreCase(name)) {
+                                matches.add(trigger);
+                        }
+                        for (String alias : trigger.aliases) {
+                                if (alias.equalsIgnoreCase(name)) {
+                                        matches.add(trigger);
+                                }
+                        }
+                }
+                if (matches.size() == 1) {
+                        return matches.iterator().next();
+                }
+                if (matches.size() > 1) {
+                        return null; // имя принадлежит двум триггерам аддона — неоднозначно
+                }
+
+                // Имя зарезервировано за MythicMobs/MythicCrucible: аддон его
+                // не регистрирует, но строку пассивки должен понимать.
+                String reserved = name.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
+                return BY_RESERVED.get(reserved);
+        }
+
+        /**
+         * @return {@code true} для {@code ~onStartPassive} / {@code ~onEndPassive} —
+         *         такие строки выполняются на активации/деактивации пассивки,
+         *         а не по событию игрока
+         */
+        public boolean isLifecycle() {
+                return this == START || this == END;
         }
 
         /**

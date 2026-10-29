@@ -137,6 +137,8 @@
       <option value="onTimer:20">~onTimer:20 — каждую секунду</option>
       <option value="onTimer:100">~onTimer:100 — каждые 5 сек</option>
       <option value="onTimer:200">~onTimer:200 — каждые 10 сек</option>
+      <option value="onStartPassive">~onStartPassive — пассивка включилась</option>
+      <option value="onEndPassive">~onEndPassive — пассивка выключилась</option>
       <option value="onSneak">~onSneak — игрок присел</option>
       <option value="onUnsneak">~onUnsneak — игрок встал</option>
       <option value="onAttack">~onAttack — атака</option>
@@ -338,6 +340,19 @@
     <span class="tag">~onRespawn</span>
   </div>
 
+  <h3>Старт и конец пассивки</h3>
+  <div>
+    <span class="tag">~onStartPassive</span><span class="tag">~onEndPassive</span>
+    <span class="tag">~onPassiveStart</span><span class="tag">~onPassiveEnd</span>
+  </div>
+  <div class="note">
+    Строки с этими триггерами выполняются не по событию игрока, а когда пассивка
+    <b>включилась</b> (вход, выдача права) или <b>выключилась</b> (снятие права,
+    выход, смена мира).<br>
+    <code>?passive=&lt;id&gt;</code> — только для этой пассивки; без фильтра — для любой пассивки игрока.<br>
+    ID пассивки: <code>&lt;имя_файла&gt;:&lt;ключ&gt;</code>, например <code>example:sneak_levitation</code>.
+  </div>
+
   <h3>Таймер</h3>
   <div>
     <span class="tag">~onTimer:40</span><span class="tag">~onInterval:40</span><span class="tag">~onTick:40</span>
@@ -460,6 +475,18 @@
       - "skill{s=RegenAura} @self ~onTimer:100"
       - "skill{s=SneakBurst} @self ~onSneak ?chance{c=0.3}"
       - "effect{d=1} @trigger ~onAttack"</pre>
+</div>
+<div class="panel">
+  <h3>Рывок на таймере + эффект старта/конца</h3>
+  <pre>PassiveSkills:
+  sneak_levitation:
+    Permission: mythicpassives.levitation
+    Skills:
+      - "lunge{velocity=0.6;velocityY=0.1} @self ~onTimer:2 ?sneaking ?!onGround"
+      - "particle{particle=SPELL_WITCH} @self ~onStartPassive ?passive=example:sneak_levitation"
+      - "particle{particle=SMOKE} @self ~onEndPassive ?passive=example:sneak_levitation"
+      - "cooldown{s=sneak_levitation} @self ~onEndPassive ?passive=example:sneak_levitation"</pre>
+  <div class="note">Рывок — каждый тик, пока в присяде и в воздухе. Частицы — на включение и выключение.</div>
 </div>
 <div class="panel">
   <h3>Раса: таймер + прыжок + F в воздухе</h3>
