@@ -69,6 +69,9 @@ public final class PassiveAction {
 
     /**
      * Проверяет, нужно ли выполнять действие на событии старта/конца пассивки.
+     * <p>
+     * Фильтр может содержать несколько ID через запятую или {@code |}:
+     * {@code ?passive=a,b}. Достаточно совпадения любого.
      *
      * @param changedId ID пассивки, которая включилась/выключилась
      */
@@ -76,7 +79,17 @@ public final class PassiveAction {
         if (passiveFilter == null) {
             return true;
         }
-        return changedId != null && getPassiveFilter().equals(changedId.toLowerCase(java.util.Locale.ROOT));
+        if (changedId == null) {
+            return false;
+        }
+
+        String normalized = changedId.trim().toLowerCase(java.util.Locale.ROOT);
+        for (String candidate : passiveFilter.split("[,|]")) {
+            if (candidate.trim().equals(normalized)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public String getPassiveFilter() {

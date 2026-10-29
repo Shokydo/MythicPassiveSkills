@@ -22,6 +22,11 @@
 
 ### Исправлено
 
+- **`~onEndPassive{passive=<id>}` не работал**: `{...}` у триггера не вырезались
+  и превращались в таргетер `SELF}` — `@self` переставал загружаться
+  (`Failed to load custom targeter SELF]`), а строка ничего не делала.
+  Теперь опции триггера разбираются аддоном, как и `?passive=<id>`.
+- `?passive=<id1,id2>` — список ID через запятую или `|`.
 - `PassiveTrigger.parseExact()` учитывает имена, зарезервированные за
   MythicMobs/MythicCrucible (`~onLeftClick`, `~onUse`, …).
 

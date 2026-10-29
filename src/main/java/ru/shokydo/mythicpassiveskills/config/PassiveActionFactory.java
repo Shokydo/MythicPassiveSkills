@@ -27,6 +27,19 @@ public final class PassiveActionFactory {
     private static final Pattern TRIGGER_PATTERN =
             Pattern.compile("~([A-Za-z_][A-Za-z0-9_]*)(?::(\\d+))?");
 
+    /**
+     * Триггер с опциями: {@code ~onEndPassive{passive=example:sneak.levitation}},
+     * {@code ~onEndPassive{passive=a,b}}. Захватывает имя и содержимое скобок.
+     */
+    private static final Pattern TRIGGER_OPTIONS_PATTERN = Pattern.compile(
+            "~(?<trigger>[A-Za-z_][A-Za-z0-9_]*)(?::\\d+)?\\{([^{}]*)\\}");
+
+    /**
+     * Безобидные опции триггеров, которые Minecraft/MythicMobs встречают в
+     * строках скиллов и которые не надо вырезать (это части самой механики).
+     */
+    private static final List<String> KEYWORD_OPTIONS = List.of("force", "true", "false");
+
     private final MythicPassiveSkillsPlugin plugin;
 
     public PassiveActionFactory(MythicPassiveSkillsPlugin plugin) {
@@ -109,10 +122,41 @@ public final class PassiveActionFactory {
         //    ~триггер и ?условия. Триггер вырезаем — MythicMobs не должен
         //    видеть его в строке MetaSkill, иначе компиляция ломается на
         //    кастомных триггерах. Условия проверяет наша система (conditionsPass).
+        // 2a. Триггер может нести опции: ~onEndPassive{passive=<id>}.
+        //     Вытаскиваем их сами: MythicMobs такой триггер не знает, а скобки
+        //     без этого превратились бы в имя таргетера SELF} и ломали скилл.
+        String passiveFilter = null;
+        Matcher triggerOptions = TRIGGER_OPTIONS_PATTERN.matcher(line);
+        StringBuilder rebuilt = new StringBuilder(line.length());
+        int last = 0;
+        while (triggerOptions.find()) {
+            String option = triggerOptions.group(2);
+            if (KEYWORD_OPTIONS.contains(option.trim().toLowerCase(java.util.Locale.ROOT))) {
+                continue; // не наша опция — оставляем как есть
+            }
+
+            rebuilt.append(line, last, triggerOptions.start());
+            String value = optionValue(option, "passive");
+            if (value != null) {
+                passiveFilter = value;
+            } else {
+                plugin.getLogger().warning("Неизвестная опция триггера '~"
+                        + triggerOptions.group("trigger") + "{" + option + "}' в строке: " + line
+                        + ". Поддерживается только passive=<id>.");
+            }
+            rebuilt.append('~').append(triggerOptions.group("trigger"));
+            last = triggerOptions.end();
+        }
+        rebuilt.append(line.substring(last));
+        line = rebuilt.toString().replaceAll("\\s{2,}", " ").trim();
+
+        // 2b. Разрезаем строку на токены верхнего уровня: механика/таргетер,
+        //    ~триггер и ?условия. Триггер вырезаем — MythicMobs не должен
+        //    видеть его в строке MetaSkill, иначе компиляция ломается на
+        //    кастомных триггерах. Условия проверяет наша система (conditionsPass).
         List<String> tokens = splitTokens(line);
         List<String> mechanicTokens = new ArrayList<>();
         List<String> inlineConditions = new ArrayList<>();
-        String passiveFilter = null;
         for (String token : tokens) {
             if (token.startsWith("~")) {
                 continue;
@@ -127,7 +171,9 @@ public final class PassiveActionFactory {
                 // ~onStartPassive / ~onEndPassive: выполнить только для этой пассивки.
                 String bare = condition.startsWith("!") ? condition.substring(1).trim() : condition;
                 if (bare.toLowerCase(java.util.Locale.ROOT).startsWith("passive=")) {
-                    passiveFilter = bare.substring("passive=".length()).trim();
+                    // Может быть несколько ?passive=... — достаточно любого совпадения.
+                    String id = bare.substring("passive=".length()).trim();
+                    passiveFilter = passiveFilter == null ? id : passiveFilter + "|" + id;
                     continue;
                 }
 
@@ -267,6 +313,26 @@ public final class PassiveActionFactory {
      * Полная строка — это механика MythicMobs с таргетером, триггером или условием.
      * Имя скилла старого формата не содержит этих символов.
      */
+    /**
+     * Значение ключа из опций триггера: {@code passive=x} → {@code x}.
+     *
+     * @return значение или {@code null}, если ключа нет
+     */
+    private static String optionValue(String options, String key) {
+        for (String part : options.split("[;,]", -1)) {
+            String trimmed = part.trim();
+            int eq = trimmed.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            if (trimmed.substring(0, eq).trim().equalsIgnoreCase(key)) {
+                String value = trimmed.substring(eq + 1).trim();
+                return value.isEmpty() ? null : value;
+            }
+        }
+        return null;
+    }
+
     public static boolean isFullLine(String line) {
         return line.indexOf('{') >= 0
                 || line.indexOf('@') >= 0
