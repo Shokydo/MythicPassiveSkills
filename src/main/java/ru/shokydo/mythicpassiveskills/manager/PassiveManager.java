@@ -58,6 +58,22 @@ public final class PassiveManager {
     /** {@code true}, пока выполняются строки {@code ~onStartPassive}/{@code ~onEndPassive}. */
     private boolean inLifecycle;
 
+    /**
+     * Результат обработки события пассивками.
+     *
+     * @param cast   хотя бы одно действие реально выполнилось
+     * @param cancel хотя бы одна строка {@code cancelevent} прошла по условиям
+     *               и требует отменить Bukkit-событие
+     */
+    public record FireResult(boolean cast, boolean cancel) {
+
+        public static final FireResult NONE = new FireResult(false, false);
+
+        public boolean fired() {
+            return cast || cancel;
+        }
+    }
+
     public PassiveManager(MythicPassiveSkillsPlugin plugin) {
         this.plugin = plugin;
         this.caster = new SkillCasterService(plugin);
@@ -198,7 +214,8 @@ public final class PassiveManager {
 
         UUID uuid = player.getUniqueId();
         for (PassiveAction action : profile.actions()) {
-            if (action.trigger() != PassiveTrigger.INTERVAL) {
+            // cancelevent не выполняет механику и не может работать по таймеру.
+            if (action.trigger() != PassiveTrigger.INTERVAL || action.isCancelEvent()) {
                 continue;
             }
 
@@ -258,7 +275,8 @@ public final class PassiveManager {
             }
 
             for (PassiveAction action : profile.actions()) {
-                if (action.trigger() != trigger || !action.matchesPassive(changedId)) {
+                if (action.trigger() != trigger || action.isCancelEvent()
+                        || !action.matchesPassive(changedId)) {
                     continue;
                 }
 
@@ -270,6 +288,10 @@ public final class PassiveManager {
     }
 
     private void intervalTick(UUID uuid, String profileId, PassiveAction action) {
+        if (action.isCancelEvent()) {
+            return;
+        }
+
         ActivePassive passive = getActive(uuid, profileId);
         if (passive == null) {
             return;
@@ -359,16 +381,31 @@ public final class PassiveManager {
      * @return {@code true}, если хотя бы одно действие пассивки реально выполнилось
      */
     public boolean fire(Player player, PassiveTrigger trigger, Entity context, ItemStack held) {
+        return fireResult(player, trigger, context, held).cast();
+    }
+
+    /**
+     * Обрабатывает событие и возвращает не только факт выполнения скилла,
+     * но и запрос {@code cancelevent} на отмену Bukkit-события.
+     */
+    public FireResult fireResult(Player player, PassiveTrigger trigger, Entity context, ItemStack held) {
         if (player == null || !player.isOnline()) {
-            return false;
+            return FireResult.NONE;
         }
 
         Map<String, ActivePassive> map = active.get(player.getUniqueId());
         if (map == null || map.isEmpty()) {
-            return false;
+            return FireResult.NONE;
         }
 
         boolean anyCast = false;
+        boolean cancel = false;
+
+        // Предмет в руке одинаков для всех действий события: читаем один раз.
+        Optional<String> itemId = held == null
+                ? Optional.empty()
+                : sources.mythicItemId(held);
+
         List<ActivePassive> snapshot = new ArrayList<>(map.values());
         for (ActivePassive passive : snapshot) {
             PassiveProfile profile = passive.profile();
@@ -394,13 +431,21 @@ public final class PassiveManager {
             }
 
             for (PassiveAction action : matching) {
+                // cancelevent не запускает механику: только проверяет условия
+                // и просит слушатель отменить Bukkit-событие.
+                if (action.isCancelEvent()) {
+                    if (action.accepts(itemId, trigger, sources)
+                            && caster.conditionsPass(player, profile, action)) {
+                        cancel = true;
+                        plugin.debug("Событие " + trigger.name() + " отменено строкой '"
+                                + action.line() + "' (профиль " + profile.id() + ")");
+                    }
+                    continue;
+                }
+
                 // Уступаем событие предмету только если пассивка на этом триггере
                 // уже была обслужена нашим кликом по тому же предмету.
                 // Без Mythic-предмета в руке никаких проверок нет — пассивка работает.
-                Optional<String> itemId = held == null
-                        ? Optional.empty()
-                        : sources.mythicItemId(held);
-
                 if (itemId.isPresent()) {
                     String id = itemId.get();
                     boolean served = sources.isServed(player, id, trigger.name());
@@ -436,7 +481,7 @@ public final class PassiveManager {
             }
         }
 
-        return anyCast;
+        return new FireResult(anyCast, cancel);
     }
 
     public boolean fire(Player player, PassiveTrigger trigger, Entity context) {

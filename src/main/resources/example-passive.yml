@@ -86,6 +86,39 @@ PassiveSkills:
   #   Skills:
   #     - "cooldown{s=Fireball;seconds=5} @self ~onEndPassive"
 
+  # ----------------------------------------------------------
+  #  Слоты хотбара и cancelevent
+  # ----------------------------------------------------------
+  #  ~onPressSlot0..8 — нажата клавиша слота 1..9 (нумерация слота 0..8).
+  #  ?onSlot0..8      — игрок сейчас в этом слоте хотбара.
+  #  ?inSlot0..8      — в этом слоте есть предмет.
+  #  ?onSlot0{item=MySword} — в слоте 0 лежит Mythic-предмет MySword.
+  #
+  #  cancelevent отменяет Bukkit-событие, но не запускает механику.
+  #  Пример: нажатие клавиши 1 не переключает слот, но использует скилл.
+  # example_hotbar_ability:
+  #   Permission: mythicpassives.example.hotbar
+  #   Skills:
+  #     - "cancelevent ~onPressSlot0"
+  #     - "skill{s=ExampleHotbarSkill} @self ~onPressSlot0"
+  #
+  #  Условия у cancelevent тоже работают:
+  #     - "cancelevent ~onPressSlot0 ?onSlot2"
+  #  (отменять переход в слот 0, только если сейчас выбран слот 2)
+  #
+  #  Те же ~onPressSlot0..8 работают и в обычных скиллах предмета
+  #  (plugins/MythicMobs/items/*.yml), а не только в пассивках:
+  #
+  #   daggers:
+  #     Material: ECHO_SHARD
+  #     Skills:
+  #     - cancelEvent{sync=true} @self ~onPressSlot0
+  #     - skill{s=DAGGER_LEFT_SLASH_1} @self ~onPressSlot0
+  #
+  #  Скиллы предмета запускаются и у предмета из нажатого слота, и у
+  #  предмета в руке. После установки плагина нужен /mm reload.
+  #  Отключить: item-slot-skills.enabled: false в config.yml.
+
   # Можно указать несколько прав: достаточно любого из них.
   # example_multi:
   #   Permissions:

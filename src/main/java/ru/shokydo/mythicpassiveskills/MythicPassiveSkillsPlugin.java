@@ -15,10 +15,13 @@ import org.bukkit.scheduler.BukkitTask;
 import ru.shokydo.mythicpassiveskills.command.PassiveCommand;
 import ru.shokydo.mythicpassiveskills.config.PassiveConfigLoader;
 import ru.shokydo.mythicpassiveskills.config.PassiveProfile;
+import ru.shokydo.mythicpassiveskills.listener.ItemSlotSkillListener;
+import ru.shokydo.mythicpassiveskills.listener.MythicConditionListener;
 import ru.shokydo.mythicpassiveskills.listener.MythicMechanicListener;
 import ru.shokydo.mythicpassiveskills.listener.MythicReloadListener;
 import ru.shokydo.mythicpassiveskills.listener.PassiveTriggerListener;
 import ru.shokydo.mythicpassiveskills.listener.PlayerLifecycleListener;
+import ru.shokydo.mythicpassiveskills.manager.ItemSkillService;
 import ru.shokydo.mythicpassiveskills.manager.PassiveManager;
 import ru.shokydo.mythicpassiveskills.trigger.PassiveTrigger;
 import ru.shokydo.mythicpassiveskills.trigger.TriggerSourceCache;
@@ -38,6 +41,7 @@ public final class MythicPassiveSkillsPlugin extends JavaPlugin {
     private PassiveConfigLoader configLoader;
     private PassiveManager passiveManager;
     private TriggerSourceCache triggerSources;
+    private ItemSkillService itemSkills;
     private BukkitTask refreshTask;
     private BukkitTask routingRefreshTask;
 
@@ -51,11 +55,18 @@ public final class MythicPassiveSkillsPlugin extends JavaPlugin {
             return;
         }
 
-        // Здесь триггеры НЕ регистрируем. На момент onLoad() MythicCrucible ещё не
-        // включён, и через putIfAbsent() мы первыми заняли бы имена вида onUse,
-        // onLeftClick и onPress_F — после этого скиллы предметов MythicCrucible
-        // переставали срабатывать. Регистрация происходит в onEnable(), уже после
-        // включения MythicMobs и MythicCrucible — см. registerTriggers().
+        // Остальные триггеры здесь НЕ регистрируем. На момент onLoad() MythicCrucible
+        // ещё не включён, и через putIfAbsent() мы первыми заняли бы имена вида
+        // onUse, onLeftClick и onPress_F — после этого скиллы предметов
+        // MythicCrucible переставали срабатывать. Регистрация происходит в
+        // onEnable(), уже после включения MythicMobs и MythicCrucible — см.
+        // registerTriggers().
+        //
+        // Исключение — клавиши хотбара: MythicCrucible разбирает файлы предметов
+        // раньше нашего onEnable(), и без регистрации ~onPressSlot0 в предмете
+        // молча превращался в триггер DEFAULT. Эти имена MythicCrucible не
+        // использует, поэтому занимать их безопасно.
+        PassiveTrigger.registerHotbarSlotTriggers();
     }
 
     @Override
@@ -73,6 +84,8 @@ public final class MythicPassiveSkillsPlugin extends JavaPlugin {
         passiveManager = new PassiveManager(this);
         triggerSources = passiveManager.getTriggerSources();
         triggerSources.refresh();
+        itemSkills = new ItemSkillService(this);
+        itemSkills.logSlotTriggers();
 
         // MythicMobs и MythicCrucible уже включены — их триггеры зарегистрированы,
         // поэтому putIfAbsent() оставит клики предметов им, а мы получим только ещё
@@ -80,12 +93,15 @@ public final class MythicPassiveSkillsPlugin extends JavaPlugin {
         registerTriggers();
         registerDelayedTriggers();
 
+        // Слушатели нужны до загрузки профилей: условия MythicMobs
+        // (например ?onSlot0) регистрируются через событие загрузки условия.
+        registerListeners();
+
         configLoader = new PassiveConfigLoader(this);
 
         List<PassiveProfile> profiles = configLoader.load();
         passiveManager.reload(profiles);
 
-        registerListeners();
         registerCommand();
         setupLuckPerms();
         startRefreshTask();
@@ -157,9 +173,11 @@ public final class MythicPassiveSkillsPlugin extends JavaPlugin {
 
     private void registerListeners() {
         PluginManager pluginManager = getServer().getPluginManager();
+        pluginManager.registerEvents(new MythicConditionListener(this), this);
         pluginManager.registerEvents(new MythicMechanicListener(this), this);
         pluginManager.registerEvents(new PlayerLifecycleListener(this), this);
         pluginManager.registerEvents(new PassiveTriggerListener(this), this);
+        pluginManager.registerEvents(new ItemSlotSkillListener(this), this);
         pluginManager.registerEvents(new MythicReloadListener(this), this);
 
         registerPaperJumpListener(pluginManager);
@@ -334,6 +352,22 @@ public final class MythicPassiveSkillsPlugin extends JavaPlugin {
      */
     public TriggerSourceCache getTriggerSources() {
         return triggerSources;
+    }
+
+    /**
+     * Скиллы предметов MythicCrucible на клавиши хотбара
+     * ({@code ~onPressSlot0..8}). Никогда не {@code null} после {@code onEnable()}.
+     */
+    public ItemSkillService getItemSkills() {
+        return itemSkills;
+    }
+
+    /**
+     * @return {@code true}, если нужно запускать скиллы предметов на нажатие слота
+     *         ({@code item-slot-skills.enabled} в config.yml)
+     */
+    public boolean isItemSlotSkillsEnabled() {
+        return getConfig().getBoolean("item-slot-skills.enabled", true);
     }
 
     public boolean isDebugEnabled() {

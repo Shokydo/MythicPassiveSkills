@@ -183,41 +183,63 @@ public enum PassiveTrigger {
                         "PRESST", "ONPRESST",
                         "CHAT", "ONCHAT", "PRESSCHAT", "ONPRESSCHAT"),
 
+        /**
+         * Слот хотбара 0 (клавиша 1). Алиасы {@code ~onPressSlot0} и
+         * {@code ~onPressSlot1} — нумерация слота и клавиши соответственно.
+         */
         PRESS1("PASSIVE_PRESS_1",
                         "PRESS1PASSIVE", "PASSIVEPRESS1", "ONPRESS1PASSIVE",
-                        "PRESS1", "ONPRESS1", "HOTBAR1", "ONHOTBAR1"),
+                        "PRESS1", "ONPRESS1", "HOTBAR1", "ONHOTBAR1",
+                        "PRESS_SLOT_0", "ONPRESS_SLOT_0", "ONPRESSSLOT0", "ONSLOT0",
+                        "PRESSSLOT0", "SLOT0"),
 
         PRESS2("PASSIVE_PRESS_2",
                         "PRESS2PASSIVE", "PASSIVEPRESS2", "ONPRESS2PASSIVE",
-                        "PRESS2", "ONPRESS2", "HOTBAR2", "ONHOTBAR2"),
+                        "PRESS2", "ONPRESS2", "HOTBAR2", "ONHOTBAR2",
+                        "PRESS_SLOT_1", "ONPRESS_SLOT_1", "ONPRESSSLOT1", "ONSLOT1",
+                        "PRESSSLOT1", "SLOT1"),
 
         PRESS3("PASSIVE_PRESS_3",
                         "PRESS3PASSIVE", "PASSIVEPRESS3", "ONPRESS3PASSIVE",
-                        "PRESS3", "ONPRESS3", "HOTBAR3", "ONHOTBAR3"),
+                        "PRESS3", "ONPRESS3", "HOTBAR3", "ONHOTBAR3",
+                        "PRESS_SLOT_2", "ONPRESS_SLOT_2", "ONPRESSSLOT2", "ONSLOT2",
+                        "PRESSSLOT2", "SLOT2"),
 
         PRESS4("PASSIVE_PRESS_4",
                         "PRESS4PASSIVE", "PASSIVEPRESS4", "ONPRESS4PASSIVE",
-                        "PRESS4", "ONPRESS4", "HOTBAR4", "ONHOTBAR4"),
+                        "PRESS4", "ONPRESS4", "HOTBAR4", "ONHOTBAR4",
+                        "PRESS_SLOT_3", "ONPRESS_SLOT_3", "ONPRESSSLOT3", "ONSLOT3",
+                        "PRESSSLOT3", "SLOT3"),
 
         PRESS5("PASSIVE_PRESS_5",
                         "PRESS5PASSIVE", "PASSIVEPRESS5", "ONPRESS5PASSIVE",
-                        "PRESS5", "ONPRESS5", "HOTBAR5", "ONHOTBAR5"),
+                        "PRESS5", "ONPRESS5", "HOTBAR5", "ONHOTBAR5",
+                        "PRESS_SLOT_4", "ONPRESS_SLOT_4", "ONPRESSSLOT4", "ONSLOT4",
+                        "PRESSSLOT4", "SLOT4"),
 
         PRESS6("PASSIVE_PRESS_6",
                         "PRESS6PASSIVE", "PASSIVEPRESS6", "ONPRESS6PASSIVE",
-                        "PRESS6", "ONPRESS6", "HOTBAR6", "ONHOTBAR6"),
+                        "PRESS6", "ONPRESS6", "HOTBAR6", "ONHOTBAR6",
+                        "PRESS_SLOT_5", "ONPRESS_SLOT_5", "ONPRESSSLOT5", "ONSLOT5",
+                        "PRESSSLOT5", "SLOT5"),
 
         PRESS7("PASSIVE_PRESS_7",
                         "PRESS7PASSIVE", "PASSIVEPRESS7", "ONPRESS7PASSIVE",
-                        "PRESS7", "ONPRESS7", "HOTBAR7", "ONHOTBAR7"),
+                        "PRESS7", "ONPRESS7", "HOTBAR7", "ONHOTBAR7",
+                        "PRESS_SLOT_6", "ONPRESS_SLOT_6", "ONPRESSSLOT6", "ONSLOT6",
+                        "PRESSSLOT6", "SLOT6"),
 
         PRESS8("PASSIVE_PRESS_8",
                         "PRESS8PASSIVE", "PASSIVEPRESS8", "ONPRESS8PASSIVE",
-                        "PRESS8", "ONPRESS8", "HOTBAR8", "ONHOTBAR8"),
+                        "PRESS8", "ONPRESS8", "HOTBAR8", "ONHOTBAR8",
+                        "PRESS_SLOT_7", "ONPRESS_SLOT_7", "ONPRESSSLOT7", "ONSLOT7",
+                        "PRESSSLOT7", "SLOT7"),
 
         PRESS9("PASSIVE_PRESS_9",
                         "PRESS9PASSIVE", "PASSIVEPRESS9", "ONPRESS9PASSIVE",
-                        "PRESS9", "ONPRESS9", "HOTBAR9", "ONHOTBAR9"),
+                        "PRESS9", "ONPRESS9", "HOTBAR9", "ONHOTBAR9",
+                        "PRESS_SLOT_8", "ONPRESS_SLOT_8", "ONPRESSSLOT8", "ONSLOT8",
+                        "PRESSSLOT8", "SLOT8"),
 
         HOTBAR_SLOT("PASSIVE_HOTBAR_SLOT",
                         "HOTBARSLOTPASSIVE", "PASSIVEHOTBARSLOT", "ONHOTBARSLOTPASSIVE",
@@ -488,6 +510,78 @@ public enum PassiveTrigger {
                 for (PassiveTrigger trigger : values()) {
                         SkillTrigger.create(trigger.triggerName, trigger.registrationAliases()).register();
                 }
+        }
+
+        /**
+         * Регистрирует только триггеры клавиш хотбара ({@code ~onPressSlot0..8}).
+         * <p>
+         * Вызывается из {@code onLoad()} — раньше, чем MythicCrucible разберёт
+         * файлы предметов. Без этого {@code ~onPressSlot0} в предмете попадал
+         * в {@code SkillTrigger.get()} до регистрации, не находился и молча
+         * превращался в триггер {@code DEFAULT}, поэтому скилл предмета не
+         * срабатывал никогда. Остальные имена здесь не трогаем: их регистрирует
+         * {@link #registerAll()} уже после включения MythicCrucible.
+         */
+        public static synchronized void registerHotbarSlotTriggers() {
+                for (PassiveTrigger trigger : hotbarSlotTriggers()) {
+                        SkillTrigger.create(trigger.triggerName, trigger.registrationAliases()).register();
+                }
+        }
+
+        /** @return триггеры слотов хотбара в порядке {@code 0..8} */
+        public static PassiveTrigger[] hotbarSlotTriggers() {
+                return new PassiveTrigger[]{
+                        PRESS1, PRESS2, PRESS3, PRESS4, PRESS5, PRESS6, PRESS7, PRESS8, PRESS9
+                };
+        }
+
+        /**
+         * @param slot номер слота хотбара ({@code 0..8})
+         * @return триггер нажатия этого слота или {@code null}, если номер вне диапазона
+         */
+        public static PassiveTrigger pressSlot(int slot) {
+                PassiveTrigger[] triggers = hotbarSlotTriggers();
+                return slot >= 0 && slot < triggers.length ? triggers[slot] : null;
+        }
+
+        /**
+         * Совпадает ли зарегистрированный в MythicMobs триггер с этим.
+         * <p>
+         * MythicMobs разбирает {@code ~onPressSlot0} через
+         * {@code SkillTrigger.get()}, поэтому у механики предмета может
+         * оказаться как наше имя ({@code PASSIVE_PRESS_1}), так и алиас
+         * ({@code ONPRESSSLOT0}). Сравниваем и имя, и алиасы.
+         */
+        public boolean matches(SkillTrigger<?> other) {
+                if (other == null) {
+                        return false;
+                }
+
+                String own = normalize(triggerName);
+                String otherName = normalize(other.name());
+                if (own.equals(otherName)) {
+                        return true;
+                }
+
+                List<String> otherAliases = other.aliases();
+                for (String alias : otherAliases) {
+                        if (own.equals(normalize(alias))) {
+                                return true;
+                        }
+                }
+
+                for (String alias : aliases) {
+                        String normalized = normalize(alias);
+                        if (normalized.equals(otherName)) {
+                                return true;
+                        }
+                        for (String otherAlias : otherAliases) {
+                                if (normalized.equals(normalize(otherAlias))) {
+                                        return true;
+                                }
+                        }
+                }
+                return false;
         }
 
         /**

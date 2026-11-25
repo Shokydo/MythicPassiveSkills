@@ -83,6 +83,13 @@ public final class PassiveActionFactory {
         }
 
         if (!isFullLine(line)) {
+            // Голый cancelevent без триггера тоже допустим: он отменит событие
+            // триггера профиля (Trigger/Interval).
+            if (isCancelMechanic(line)) {
+                return PassiveAction.cancel(line, fallbackTrigger, fallbackInterval,
+                        profileConditions, routing);
+            }
+
             // Имя скилла без строки: такое действие привязано к триггеру профиля,
             // поэтому для него важен только уровень «по умолчанию» из конфига.
             return PassiveAction.named(line, fallbackTrigger, fallbackInterval,
@@ -217,6 +224,13 @@ public final class PassiveActionFactory {
             }
         }
 
+        // cancelevent — не механика MythicMobs, а директива аддона: отменить
+        // Bukkit-событие (например, смену слота), если условия строки прошли.
+        if (isCancelMechanic(mechanicTokens)) {
+            return PassiveAction.cancel(line, trigger, Math.max(1, interval),
+                    conditions, routing).withPassiveFilter(passiveFilter);
+        }
+
         try {
             SkillExecutor executor = MythicBukkit.inst().getSkillManager();
             MetaSkill skill = new MetaSkill(executor, safeFile(file), List.of(mechanicPart));
@@ -338,6 +352,36 @@ public final class PassiveActionFactory {
                 || line.indexOf('@') >= 0
                 || line.indexOf('~') >= 0
                 || line.indexOf('?') >= 0;
+    }
+
+    /**
+     * @return {@code true}, если строка — директива {@code cancelevent}
+     *         (допускаются {@code cancel_event} и {@code cancel-event})
+     */
+    public static boolean isCancelMechanic(String token) {
+        if (token == null) {
+            return false;
+        }
+        String value = token.trim().toLowerCase(java.util.Locale.ROOT);
+        int brace = value.indexOf('{');
+        if (brace >= 0) {
+            value = value.substring(0, brace).trim();
+        }
+        return value.equals("cancelevent")
+                || value.equals("cancel_event")
+                || value.equals("cancel-event");
+    }
+
+    private static boolean isCancelMechanic(List<String> mechanicTokens) {
+        if (mechanicTokens.isEmpty()) {
+            return false;
+        }
+        for (String token : mechanicTokens) {
+            if (isCancelMechanic(token)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

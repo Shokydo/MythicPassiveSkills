@@ -2,6 +2,7 @@ package ru.shokydo.mythicpassiveskills.listener;
 
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Cancellable;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -36,6 +37,7 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import ru.shokydo.mythicpassiveskills.MythicPassiveSkillsPlugin;
 import ru.shokydo.mythicpassiveskills.manager.PassiveManager;
+import ru.shokydo.mythicpassiveskills.manager.PassiveManager.FireResult;
 import ru.shokydo.mythicpassiveskills.trigger.PassiveTrigger;
 import ru.shokydo.mythicpassiveskills.trigger.TriggerSourceCache;
 
@@ -88,7 +90,7 @@ public final class PassiveTriggerListener implements Listener {
         if (!event.isSneaking()) {
             return;
         }
-        fire(event.getPlayer(), PassiveTrigger.SNEAK, null);
+        fireCancellable(event.getPlayer(), PassiveTrigger.SNEAK, null, event);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -96,7 +98,7 @@ public final class PassiveTriggerListener implements Listener {
         if (event.isSneaking()) {
             return;
         }
-        fire(event.getPlayer(), PassiveTrigger.UNSNEAK, null);
+        fireCancellable(event.getPlayer(), PassiveTrigger.UNSNEAK, null, event);
     }
 
     /*
@@ -110,7 +112,7 @@ public final class PassiveTriggerListener implements Listener {
         if (!(event.getDamager() instanceof Player player)) {
             return;
         }
-        fire(player, PassiveTrigger.ATTACK, event.getEntity());
+        fireCancellable(player, PassiveTrigger.ATTACK, event.getEntity(), event);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -118,7 +120,7 @@ public final class PassiveTriggerListener implements Listener {
         if (!(event.getEntity() instanceof Player player)) {
             return;
         }
-        fire(player, PassiveTrigger.DAMAGED, null);
+        fireCancellable(player, PassiveTrigger.DAMAGED, null, event);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -143,12 +145,12 @@ public final class PassiveTriggerListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
-        fire(event.getPlayer(), PassiveTrigger.BLOCK_BREAK, null);
+        fireCancellable(event.getPlayer(), PassiveTrigger.BLOCK_BREAK, null, event);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockPlace(BlockPlaceEvent event) {
-        fire(event.getPlayer(), PassiveTrigger.BLOCK_PLACE, null);
+        fireCancellable(event.getPlayer(), PassiveTrigger.BLOCK_PLACE, null, event);
     }
 
     // ------------------------------------------------------------ Клики
@@ -173,7 +175,8 @@ public final class PassiveTriggerListener implements Listener {
                 return;
             }
 
-            if (fireClicks(player)) {
+            FireResult clicks = fireClicks(player);
+            if (clicks.fired()) {
                 // Событие принадлежит пассивке — MythicCrucible клик не увидит.
                 event.setCancelled(true);
             }
@@ -184,7 +187,9 @@ public final class PassiveTriggerListener implements Listener {
             return;
         }
 
-        if (fire(player, PassiveTrigger.RIGHT_CLICK, null) | fire(player, PassiveTrigger.INTERACT, null)) {
+        FireResult rightClick = fireResult(player, PassiveTrigger.RIGHT_CLICK, null);
+        FireResult interact = fireResult(player, PassiveTrigger.INTERACT, null);
+        if (rightClick.fired() || interact.fired()) {
             event.setCancelled(true);
             return;
         }
@@ -230,8 +235,17 @@ public final class PassiveTriggerListener implements Listener {
     public void onSwapHands(PlayerSwapHandItemsEvent event) {
         Player player = event.getPlayer();
 
-        if (!fire(player, PassiveTrigger.PRESS_F, null)) {
+        FireResult result = fireResult(player, PassiveTrigger.PRESS_F, null);
+        if (!result.fired()) {
             return; // пассивки на F нет: ванильный свап остаётся ванильным
+        }
+
+        // Явный cancelevent сильнее совместимости с предметом:
+        // пользователь попросил отменить событие — отменяем.
+        if (result.cancel()) {
+            event.setCancelled(true);
+            plugin.debug("Свап рук отменён строкой cancelevent у " + player.getName());
+            return;
         }
 
         if (shouldPreserveSwap(player)) {
@@ -299,19 +313,21 @@ public final class PassiveTriggerListener implements Listener {
     /**
      * Запускает оба «левых» триггера пассивки.
      *
-     * @return {@code true}, если хотя бы одна пассивка реально сработала
+     * @return результат: выполненный скилл и/или запрос {@code cancelevent}
      */
-    private boolean fireClicks(Player player) {
-        boolean fired = fire(player, PassiveTrigger.LEFT_CLICK, null);
-        if (oncePerTick(PRIMARY_KEY + player.getUniqueId())) {
-            fired |= fire(player, PassiveTrigger.PRIMARY_CLICK, null);
+    private FireResult fireClicks(Player player) {
+        FireResult left = fireResult(player, PassiveTrigger.LEFT_CLICK, null);
+        if (!oncePerTick(PRIMARY_KEY + player.getUniqueId())) {
+            return left;
         }
-        return fired;
+
+        FireResult primary = fireResult(player, PassiveTrigger.PRIMARY_CLICK, null);
+        return new FireResult(left.cast() || primary.cast(), left.cancel() || primary.cancel());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onDrop(PlayerDropItemEvent event) {
-        fire(event.getPlayer(), PassiveTrigger.PRESS_Q, null);
+        fireCancellable(event.getPlayer(), PassiveTrigger.PRESS_Q, null, event);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -322,7 +338,7 @@ public final class PassiveTriggerListener implements Listener {
         // Не стреляем при открытии собственного инвентаря (клавиша E).
         if (event.getInventory().getHolder() == player
                 || event.getInventory().equals(player.getInventory())) {
-            fire(player, PassiveTrigger.PRESS_E, null);
+            fireCancellable(player, PassiveTrigger.PRESS_E, null, event);
         }
     }
 
@@ -331,19 +347,39 @@ public final class PassiveTriggerListener implements Listener {
         fire(event.getPlayer(), PassiveTrigger.PRESS_T, null);
     }
 
+    /**
+     * Смена слота хотбара. Триггеры {@code ~onPressSlot0..8} — это те же
+     * {@link PassiveTrigger#PRESS1}…{@link PassiveTrigger#PRESS9}, но с
+     * нумерацией слота (клавиша 1 = слот 0).
+     * <p>
+     * Строка {@code cancelevent ~onPressSlot0} отменяет само событие:
+     * игрок остаётся в прежнем слоте, а скиллы с этим триггером всё равно
+     * выполняются.
+     */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onHotbarSlot(PlayerItemHeldEvent event) {
-        fire(event.getPlayer(), PassiveTrigger.HOTBAR_SLOT, null);
-        switch (event.getNewSlot()) {
-            case 0 -> fire(event.getPlayer(), PassiveTrigger.PRESS1, null);
-            case 1 -> fire(event.getPlayer(), PassiveTrigger.PRESS2, null);
-            case 2 -> fire(event.getPlayer(), PassiveTrigger.PRESS3, null);
-            case 3 -> fire(event.getPlayer(), PassiveTrigger.PRESS4, null);
-            case 4 -> fire(event.getPlayer(), PassiveTrigger.PRESS5, null);
-            case 5 -> fire(event.getPlayer(), PassiveTrigger.PRESS6, null);
-            case 6 -> fire(event.getPlayer(), PassiveTrigger.PRESS7, null);
-            case 7 -> fire(event.getPlayer(), PassiveTrigger.PRESS8, null);
-            case 8 -> fire(event.getPlayer(), PassiveTrigger.PRESS9, null);
+        Player player = event.getPlayer();
+        boolean cancel = fireResult(player, PassiveTrigger.HOTBAR_SLOT, null).cancel();
+        cancel |= switch (event.getNewSlot()) {
+            case 0 -> fireResult(player, PassiveTrigger.PRESS1, null).cancel();
+            case 1 -> fireResult(player, PassiveTrigger.PRESS2, null).cancel();
+            case 2 -> fireResult(player, PassiveTrigger.PRESS3, null).cancel();
+            case 3 -> fireResult(player, PassiveTrigger.PRESS4, null).cancel();
+            case 4 -> fireResult(player, PassiveTrigger.PRESS5, null).cancel();
+            case 5 -> fireResult(player, PassiveTrigger.PRESS6, null).cancel();
+            case 6 -> fireResult(player, PassiveTrigger.PRESS7, null).cancel();
+            case 7 -> fireResult(player, PassiveTrigger.PRESS8, null).cancel();
+            case 8 -> fireResult(player, PassiveTrigger.PRESS9, null).cancel();
+            default -> false;
+        };
+
+        if (cancel) {
+            event.setCancelled(true);
+            plugin.debug("Смена слота отменена (cancelevent) у " + player.getName());
+
+            // Paper сам возвращает клиенту прежний слот при отмене
+            // PlayerItemHeldEvent (ClientboundSetHeldSlotPacket), поэтому
+            // дополнительная синхронизация не нужна.
         }
     }
 
@@ -352,12 +388,12 @@ public final class PassiveTriggerListener implements Listener {
         if (!(event.getEntity() instanceof Player player)) {
             return;
         }
-        fire(player, PassiveTrigger.SHOOT, null);
+        fireCancellable(player, PassiveTrigger.SHOOT, null, event);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onConsume(PlayerItemConsumeEvent event) {
-        fire(event.getPlayer(), PassiveTrigger.CONSUME, null);
+        fireCancellable(event.getPlayer(), PassiveTrigger.CONSUME, null, event);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -367,7 +403,7 @@ public final class PassiveTriggerListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onFish(PlayerFishEvent event) {
-        fire(event.getPlayer(), PassiveTrigger.FISH, null);
+        fireCancellable(event.getPlayer(), PassiveTrigger.FISH, null, event);
     }
 
     // ------------------------------------------------------------ Предметы
@@ -377,7 +413,7 @@ public final class PassiveTriggerListener implements Listener {
         if (!(event.getEntity() instanceof Player player)) {
             return;
         }
-        fire(player, PassiveTrigger.PICKUP, null);
+        fireCancellable(player, PassiveTrigger.PICKUP, null, event);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -385,7 +421,7 @@ public final class PassiveTriggerListener implements Listener {
         if (!(event.getEntity().getShooter() instanceof Player player)) {
             return;
         }
-        fire(player, PassiveTrigger.THROW, null);
+        fireCancellable(player, PassiveTrigger.THROW, null, event);
     }
 
     // ------------------------------------------------------------ Прочие
@@ -393,14 +429,14 @@ public final class PassiveTriggerListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onSprintStart(PlayerToggleSprintEvent event) {
         if (event.isSprinting()) {
-            fire(event.getPlayer(), PassiveTrigger.SPRINT_START, null);
+            fireCancellable(event.getPlayer(), PassiveTrigger.SPRINT_START, null, event);
         }
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onSprintStop(PlayerToggleSprintEvent event) {
         if (!event.isSprinting()) {
-            fire(event.getPlayer(), PassiveTrigger.SPRINT_STOP, null);
+            fireCancellable(event.getPlayer(), PassiveTrigger.SPRINT_STOP, null, event);
         }
     }
 
@@ -409,12 +445,12 @@ public final class PassiveTriggerListener implements Listener {
         if (!(event.getEntity() instanceof Player player)) {
             return;
         }
-        fire(player, PassiveTrigger.HEAL, null);
+        fireCancellable(player, PassiveTrigger.HEAL, null, event);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPortal(PlayerPortalEvent event) {
-        fire(event.getPlayer(), PassiveTrigger.PORTAL, null);
+        fireCancellable(event.getPlayer(), PassiveTrigger.PORTAL, null, event);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -424,7 +460,7 @@ public final class PassiveTriggerListener implements Listener {
                 || event.getCause() == PlayerTeleportEvent.TeleportCause.END_GATEWAY) {
             return; // порталы обрабатывает отдельный триггер
         }
-        fire(event.getPlayer(), PassiveTrigger.TELEPORT, null);
+        fireCancellable(event.getPlayer(), PassiveTrigger.TELEPORT, null, event);
     }
 
     // ------------------------------------------------------------ Утилиты
@@ -435,11 +471,34 @@ public final class PassiveTriggerListener implements Listener {
      * @return {@code true}, если хотя бы одно действие реально выполнилось
      */
     private boolean fire(Player player, PassiveTrigger trigger, org.bukkit.entity.Entity context) {
+        return fireResult(player, trigger, context).cast();
+    }
+
+    /**
+     * Вызывает действия пассивок и возвращает полный результат,
+     * включая запрос {@code cancelevent}.
+     */
+    private FireResult fireResult(Player player, PassiveTrigger trigger,
+                                  org.bukkit.entity.Entity context) {
         PassiveManager manager = plugin.getPassiveManager();
         if (manager == null) {
-            return false;
+            return FireResult.NONE;
         }
-        return manager.fire(player, trigger, context, heldItem(player));
+        return manager.fireResult(player, trigger, context, heldItem(player));
+    }
+
+    /**
+     * Запускает пассивку и отменяет событие, если сработала строка
+     * {@code cancelevent} с этим триггером.
+     */
+    private FireResult fireCancellable(Player player, PassiveTrigger trigger,
+                                       org.bukkit.entity.Entity context, Cancellable event) {
+        FireResult result = fireResult(player, trigger, context);
+        if (result.cancel()) {
+            event.setCancelled(true);
+            plugin.debug("Событие " + trigger.name() + " отменено (cancelevent) у " + player.getName());
+        }
+        return result;
     }
 
     /**

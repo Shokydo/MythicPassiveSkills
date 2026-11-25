@@ -30,6 +30,11 @@ public final class PassiveAction {
     private final List<ConditionSpec> conditions;
     private final TriggerRouting routing;
     /**
+     * {@code true} для строки {@code cancelevent}: действие не запускает
+     * механику MythicMobs, а только отменяет Bukkit-событие, если условия прошли.
+     */
+    private final boolean cancelEvent;
+    /**
      * ID пассивки из {@code ?passive=<id>} для {@code ~onStartPassive}/{@code ~onEndPassive}.
      * {@code null} — сработать при включении/выключении любой пассивки игрока.
      */
@@ -43,6 +48,7 @@ public final class PassiveAction {
                           SkillTrigger skillTrigger,
                           List<ConditionSpec> conditions,
                           TriggerRouting routing,
+                          boolean cancelEvent,
                           String passiveFilter) {
         this.line = line;
         this.trigger = trigger;
@@ -52,6 +58,7 @@ public final class PassiveAction {
         this.skillTrigger = skillTrigger;
         this.conditions = List.copyOf(conditions);
         this.routing = routing == null ? TriggerRouting.ALL : routing;
+        this.cancelEvent = cancelEvent;
         this.passiveFilter = passiveFilter == null || passiveFilter.isBlank()
                 ? null
                 : passiveFilter.trim().toLowerCase(java.util.Locale.ROOT);
@@ -64,7 +71,7 @@ public final class PassiveAction {
      */
     public PassiveAction withPassiveFilter(String passiveFilter) {
         return new PassiveAction(line, trigger, interval, skill, skillName, skillTrigger,
-                conditions, routing, passiveFilter);
+                conditions, routing, cancelEvent, passiveFilter);
     }
 
     /**
@@ -153,7 +160,8 @@ public final class PassiveAction {
                                          SkillTrigger skillTrigger,
                                          List<ConditionSpec> conditions,
                                          TriggerRouting routing) {
-        return new PassiveAction(line, trigger, interval, skill, null, skillTrigger, conditions, routing, null);
+        return new PassiveAction(line, trigger, interval, skill, null, skillTrigger,
+                conditions, routing, false, null);
     }
 
     /**
@@ -165,7 +173,21 @@ public final class PassiveAction {
                                       SkillTrigger skillTrigger,
                                       List<ConditionSpec> conditions,
                                       TriggerRouting routing) {
-        return new PassiveAction(name, trigger, interval, null, name, skillTrigger, conditions, routing, null);
+        return new PassiveAction(name, trigger, interval, null, name, skillTrigger,
+                conditions, routing, false, null);
+    }
+
+    /**
+     * Строка {@code cancelevent}: отменить Bukkit-событие, не запуская механику.
+     * Условия строки и профиля проверяются так же, как у обычного действия.
+     */
+    public static PassiveAction cancel(String line,
+                                       PassiveTrigger trigger,
+                                       int interval,
+                                       List<ConditionSpec> conditions,
+                                       TriggerRouting routing) {
+        return new PassiveAction(line, trigger, interval, null, null, trigger.skillTrigger(),
+                conditions, routing, true, null);
     }
 
     /**
@@ -230,6 +252,14 @@ public final class PassiveAction {
      */
     public boolean isLegacy() {
         return skillName != null;
+    }
+
+    /**
+     * {@code true} — строка {@code cancelevent}: отменяет Bukkit-событие,
+     * не выполняя механику MythicMobs.
+     */
+    public boolean isCancelEvent() {
+        return cancelEvent;
     }
 
     /**

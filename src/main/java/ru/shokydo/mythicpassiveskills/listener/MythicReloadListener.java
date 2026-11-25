@@ -29,6 +29,9 @@ public final class MythicReloadListener implements Listener {
             // Предметы (и их триггеры MythicCrucible) могли измениться — перечитываем.
             plugin.refreshTriggerSources();
             plugin.reloadPassives();
+            if (plugin.getItemSkills() != null) {
+                plugin.getItemSkills().logSlotTriggers();
+            }
         });
     }
 }

@@ -30,7 +30,7 @@
 ## Установка
 
 1. Соберите плагин или возьмите готовый jar.
-2. Положите `MythicPassiveSkills-1.2.0.jar` в `plugins/`.
+2. Положите `MythicPassiveSkills-1.3.0.jar` в `plugins/`.
 3. Запустите сервер. Появится папка `plugins/MythicMobs/PassiveSkills/`
    с файлом `example.yml`.
 4. Создайте свои профили в `plugins/MythicMobs/PassiveSkills/*.yml`.
@@ -129,11 +129,102 @@ PassiveSkills:
 | `~onConsume` | Съел / выпил предмет. |
 | `~onWorldChange` | Смена мира. |
 | `~onFish` | Поймал рыбу или сущность. |
+| `~onPressSlot0` … `~onPressSlot8` | Нажата клавиша слота 1…9 (нумерация слота 0…8). |
 
 Дополнительно зарегистрированы «пассивные» варианты:
 `~onSneakPassive`, `~onAttackPassive`, `~onDamagedPassive` и т.д.
 Для таймера можно писать `~onTimer:40`, `~onInterval:40` или `~onTick:40` —
 это одно и то же.
+
+### Слоты хотбара, условия предметов и `cancelevent`
+
+| Триггер | Когда срабатывает |
+|---|---|
+| `~onPressSlot0` … `~onPressSlot8` | Игрок нажал клавишу слота 1…9. Число — это слот (0…8), а не клавиша. |
+| `~onPress1` … `~onPress9` | То же самое, но нумерация клавиш (1…9). |
+
+Для предметов и способностей добавлены условия хотбара:
+
+| Условие | Что проверяет |
+|---|---|
+| `?onSlot0` … `?onSlot8` | Игрок сейчас находится в указанном слоте хотбара. |
+| `?inSlot0` … `?inSlot8` | В указанном слоте есть любой предмет. |
+| `?onSlot0{item=MySword}` | В слоте 0 лежит Mythic-предмет `MySword`. |
+| `?inSlot4{item=DIAMOND_SWORD}` | В слоте 4 лежит алмазный меч. |
+| `?onSlot{slot=2;item=MySword;selected=true}` | Универсальная запись: слот 2 выбран и содержит `MySword`. |
+
+`item=` принимает ID Mythic-предмета или материал Bukkit. Можно явно указать
+тип: `mythic:MySword` или `material:DIAMOND_SWORD`. Без `item=` условие
+`?inSlotN` проверяет только наличие предмета.
+
+> **Важно:** событие `~onPressSlotN` приходит до того, как сервер применит
+> смену слота. Поэтому `?onSlotM` в такой строке видит **прежний** слот
+> (откуда игрок уходит), а не целевой. Для проверки предмета в целевом слоте
+> используйте `?inSlotN{item=...}` — оно не зависит от выбранного слота.
+
+
+`cancelevent` — строка-директива: она **не запускает механику**, а отменяет
+Bukkit-событие, если условия строки и профиля прошли. Типичный пример — не
+переключать слот, но использовать способность:
+
+```yaml
+PassiveSkills:
+  hotbar_ability:
+    Permission: mythicpassives.hotbar
+    Skills:
+      - "cancelevent ~onPressSlot0"
+      - "skill{s=ExampleHotbarSkill} @self ~onPressSlot0"
+```
+
+Игрок нажимает клавишу 1, остаётся в прежнем слоте, а `ExampleHotbarSkill`
+выполняется. Условия работают и у `cancelevent`:
+
+```yaml
+Skills:
+  # Отменять переход в слот 0 только если сейчас выбран слот 3.
+  - "cancelevent ~onPressSlot0 ?onSlot3"
+```
+
+`cancelevent` работает и с другими отменяемыми событиями: кликами
+(`~onLeftClick`, `~onRightClick`), `~onPressF`, `~onPressQ`, `~onPressE`,
+`~onSneak`, `~onAttack`, `~onDamaged`, `~onBlockBreak`, `~onBlockPlace`,
+`~onShoot`, `~onConsume`, `~onPickup`, `~onThrow`, `~onFish`, `~onPortal`,
+`~onTeleport` и `~onHeal`.
+
+### Клавиши хотбара у предметов MythicCrucible
+
+`~onPressSlot0`…`~onPressSlot8` работают и в **обычных скиллах предмета**
+(`plugins/MythicMobs/items/*.yml`), а не только в пассивных профилях.
+MythicCrucible сам вызывает скиллы предмета только на `onHeld`/`onUnheld`,
+поэтому клавиши слотов запускает этот плагин:
+
+```yaml
+daggers:
+  Material: ECHO_SHARD
+  CustomModelData: 10000
+  Skills:
+  - cancelEvent{sync=true} @self ~onPressSlot0
+  - skill{s=DAGGER_LEFT_SLASH_1} @self ~onPressSlot0
+  - skill{s=DAGGER_LEFT_SLASH_2} @self ~onPressSlot0
+```
+
+Игрок стоит в слоте 3, нажимает клавишу 1 → слот не меняется (остаётся 3),
+а `DAGGER_LEFT_SLASH_1` и `DAGGER_LEFT_SLASH_2` выполняются.
+
+Правила:
+
+- число — это **слот** (клавиша 1 = `~onPressSlot0`), как и в пассивках;
+- скиллы запускаются и у предмета из нажатого слота, и у предмета в руке —
+  подходит и «предмет в слоте», и «способность оружия по клавише»; один и
+  тот же предмет дважды не срабатывает;
+- `cancelEvent` отменяет смену слота, но не останавливает остальные строки
+  того же триггера — способность выполняется;
+- отключить всё целиком: `item-slot-skills.enabled: false` в `config.yml`;
+- после установки/обновления плагина нужен `/mm reload` (или перезапуск),
+  иначе старые определения предметов останутся без `~onPressSlot`;
+- проверить, что предмет подхватился, можно с `settings.debug: true`:
+  при включении плагина в консоль пишется
+  `Предмет daggers слушает ~onPressSlot[0]`.
 
 ### Старт и конец пассивки
 
@@ -220,6 +311,10 @@ Skills:
 
 Дополнительно можно указать условия на уровне профиля (старое поле `Conditions`).
 Они проверяются перед каждым действием профиля.
+
+Кастомные условия хотбара (`?onSlot0`…`?onSlot8`, `?inSlot0`…`?inSlot8`)
+описаны в разделе [«Слоты хотбара, условия предметов и `cancelevent`»](#слоты-хотбара-условия-предметов-и-cancelevent).
+
 
 ### Цели скилла
 
@@ -339,7 +434,7 @@ mvn package
 mvn package -Dmythicmobs.jar="C:\path\to\MythicMobs.jar"
 ```
 
-Готовый файл: `target/MythicPassiveSkills-1.2.0.jar`.
+Готовый файл: `target/MythicPassiveSkills-1.3.0.jar`.
 
 ## Замечания
 

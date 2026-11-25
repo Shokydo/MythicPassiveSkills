@@ -159,6 +159,46 @@ public final class SkillCasterService {
     }
 
     /**
+     * Проверяет только условия действия, не выполняя сам скилл.
+     * <p>
+     * Используется строкой {@code cancelevent}: она должна отменить
+     * Bukkit-событие (например, смену слота хотбара), но не запускать
+     * механику MythicMobs. Условия строки и профиля проверяются так же,
+     * как при обычном срабатывании.
+     *
+     * @return {@code true}, если все условия прошли
+     */
+    public boolean conditionsPass(Player player, PassiveProfile profile, PassiveAction action) {
+        if (!Bukkit.isPrimaryThread() || MythicBukkit.inst() == null) {
+            return false;
+        }
+
+        SkillManager skillManager = MythicBukkit.inst().getSkillManager();
+        if (skillManager == null) {
+            return false;
+        }
+
+        AbstractPlayer casterEntity = BukkitAdapter.adapt(player);
+        SkillCaster caster = skillManager.getCaster(casterEntity);
+        if (caster == null) {
+            return false;
+        }
+
+        List<AbstractEntity> targets = new ArrayList<>(1);
+        targets.add(casterEntity);
+        SkillMetadata metadata = buildMetadata(action.skillTrigger(), caster,
+                casterEntity, player, targets);
+
+        try {
+            return conditionsPass(profile, action, metadata);
+        } catch (Throwable throwable) {
+            plugin.getLogger().log(Level.WARNING, "Ошибка проверки условий пассивки "
+                    + profile.id(), throwable);
+            return false;
+        }
+    }
+
+    /**
      * Контекст скилла. Если триггер аддона не зарегистрирован в MythicMobs,
      * используется собственный {@code PASSIVE_INTERVAL} — скилл всё равно
      * выполняется.

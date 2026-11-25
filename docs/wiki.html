@@ -205,6 +205,10 @@
       <option value="?haspermission{p=some.perm}">?haspermission{p=...} — есть право</option>
       <option value="?chance{c=0.5}">?chance{c=0.5} — шанс 50%</option>
       <option value="?offgcd">?offgcd — глобальный кулдаун прошёл</option>
+      <option value="?onSlot0">?onSlot0 — игрок сейчас в слоте 0 (клавиша 1)</option>
+      <option value="?inSlot0">?inSlot0 — в слоте 0 есть предмет</option>
+      <option value="?onSlot0{item=MySword}">?onSlot0{item=MySword} — в слоте 0 лежит MySword</option>
+      <option value="?inSlot4{item=DIAMOND_SWORD}">?inSlot4{item=DIAMOND_SWORD} — в слоте 4 алмазный меч</option>
       <option value="?!sneaking">?!sneaking — НЕ в присядке (отрицание)</option>
     </select>
 
@@ -251,7 +255,42 @@
   <tr><td><code>@self</code></td><td>нет</td><td>Таргетер. По умолчанию цель — сам игрок.</td></tr>
   <tr><td><code>~onTimer:40</code></td><td>нет</td><td>Триггер. Без него используется триггер профиля или interval.</td></tr>
   <tr><td><code>?health{h=>0}</code></td><td>нет</td><td>Условие MythicMobs, можно несколько подряд.</td></tr>
+  <tr><td><code>cancelevent</code></td><td>нет</td><td>Вместо механики: отменить событие, если условия прошли (например, смену слота).</td></tr>
 </table>
+<div class="note">
+  <b><code>cancelevent</code></b> — директива, а не механика. Она отменяет
+  Bukkit-событие, но не запускает скилл. Пример: нажатие клавиши 1 не
+  переключает слот, но способность используется:
+  <pre>cancelevent ~onPressSlot0
+skill{s=ExampleHotbarSkill} @self ~onPressSlot0</pre>
+</div>
+<div class="note">
+  <b>Условия хотбара:</b> <code>?onSlot0..8</code> проверяет выбранный слот,
+  <code>?inSlot0..8</code> — предмет в слоте, <code>?onSlot0{item=MySword}</code> —
+  выбранный слот и предмет в нём. Событие <code>~onPressSlotN</code> приходит
+  <b>до</b> применения смены слота, поэтому <code>?onSlotM</code> в такой строке
+  видит прежний слот. Для проверки предмета в целевом слоте используйте
+  <code>?inSlotN{item=...}</code>.
+</div>
+<div class="note">
+  <b>Клавиши хотбара у предметов MythicCrucible.</b> Те же
+  <code>~onPressSlot0..8</code> работают и в обычных скиллах предмета
+  (<code>plugins/MythicMobs/items/*.yml</code>). MythicCrucible сам вызывает
+  скиллы предмета только на <code>onHeld</code>/<code>onUnheld</code>, поэтому
+  клавиши слотов запускает этот плагин — и у предмета из нажатого слота, и у
+  предмета в руке (один и тот же предмет дважды не срабатывает):
+  <pre>daggers:
+  Material: ECHO_SHARD
+  Skills:
+  - cancelEvent{sync=true} @self ~onPressSlot0
+  - skill{s=DAGGER_LEFT_SLASH_1} @self ~onPressSlot0</pre>
+  <code>cancelEvent</code> отменяет смену слота, но не останавливает остальные
+  строки того же триггера. Отключить целиком:
+  <code>item-slot-skills.enabled: false</code>. После установки плагина нужен
+  <code>/mm reload</code>, иначе старые определения предметов останутся без
+  <code>~onPressSlot</code>. Проверка: <code>settings.debug: true</code> —
+  в консоли появится <code>Предмет daggers слушает ~onPressSlot[0]</code>.
+</div>
 
 <!-- ==================== ТРИГГЕРЫ ==================== -->
 <h2 id="triggers">Все триггеры</h2>
@@ -262,7 +301,13 @@
     <span class="tag">~onPressQ</span><span class="tag">~onDrop</span><span class="tag">~onDropItem</span>
     <span class="tag">~onPressE</span><span class="tag">~onOpenInventory</span>
     <span class="tag">~onPressT</span><span class="tag">~onChat</span>
-    <span class="tag">~onPress1</span>…<span class="tag">~onPress9</span><span class="tag">~onHotbar</span><span class="tag">~onHotbarSlot</span>
+    <span class="tag">~onPress1</span>…<span class="tag">~onPress9</span><span class="tag">~onPressSlot0</span>…<span class="tag">~onPressSlot8</span>
+    <span class="tag">~onHotbar</span><span class="tag">~onHotbarSlot</span>
+  </div>
+  <div class="note">
+    <code>~onPressSlot0..8</code> — нумерация <b>слота</b> (0…8), а
+    <code>~onPress1..9</code> — нумерация <b>клавиши</b> (1…9).
+    Это одно и то же событие смены слота.
   </div>
   <div class="note">Все алиасы взаимозаменяемы: <code>~onSwapHands</code> = <code>~onPressF</code>. Регистр не важен.
     <br>Эффект свапа отменяется, только если F используется способностью (пассивкой или
@@ -347,16 +392,29 @@
   </div>
   <div class="note">
     Строки с этими триггерами выполняются не по событию игрока, а когда строка
-    пассивки <b>начала</b> или <b>перестала</b> выполняться.<br>
-    Строка с условиями (<code>~onTimer:1 ?sneaking ?!onGround</code>) работает,
-    пока условия проходят: встал на землю или отпустил присяд →
-    <code>~onEndPassive</code>; снова присел в воздухе → <code>~onStartPassive</code>.<br>
-    Для строк <b>без</b> условий эти триггеры срабатывают при включении/остановке
-    профиля (вход, выдача/снятие права, выход, смена мира).<br>
-    Фильтр по пассивке: <code>~onEndPassive{passive=&lt;id&gt;}</code> или <code>~onEndPassive ?passive=&lt;id&gt;</code> —
-    оба варианта равнозначны, можно несколько через запятую.<br>
-    Без фильтра — для любой пассивки игрока.<br>
-    ID пассивки: <code>&lt;имя_файла&gt;:&lt;ключ&gt;</code>, например <code>example:race_aviane_levitation</code>.
+    пассивки <b>начала</b> или <b>перестала</b> выполняться.
+  </div>
+  <div class="note">
+    <b>Строка с условиями</b> (<code>~onTimer:1 ?sneaking ?!onGround</code>) работает,
+    пока условия проходят: игрок приземлился или отпустил присяд →
+    <code>~onEndPassive</code>; снова присел в воздухе → <code>~onStartPassive</code>.
+    Основной сценарий: наложить кулдаун ровно в момент прекращения эффекта.
+  </div>
+  <div class="note">
+    <b>Строка без условий</b> — срабатывание при включении/остановке профиля:
+    вход, выдача/снятие права, выход, смена мира.
+  </div>
+  <div class="note">
+    Обработчики ищутся во <b>всех активных профилях</b> игрока — можно держать их
+    в том же профиле или в отдельном («общий кулдаун по концу»).
+  </div>
+  <div class="note warn">
+    Фильтр по пассивке: <code>~onEndPassive{passive=&lt;id&gt;}</code> или
+    <code>~onEndPassive ?passive=&lt;id&gt;</code> — равнозначно; несколько ID — через запятую.
+    Без фильтра — для любой пассивки игрока.
+    ID пассивки: <code>&lt;имя_файла&gt;:&lt;ключ&gt;</code> (файл <code>example.yml</code>,
+    ключ <code>race_aviane_levitation</code> → <code>example:race_aviane_levitation</code>).
+    Фильтр сверяется точно — при переносе профиля в другой файл обновите ID.
   </div>
 
   <h3>Таймер</h3>
@@ -483,7 +541,21 @@
       - "effect{d=1} @trigger ~onAttack"</pre>
 </div>
 <div class="panel">
-  <h3>Рывок на таймере + эффект старта/конца</h3>
+  <h3>Рывок в воздухе + запрет на 1 сек после приземления</h3>
+  <pre>PassiveSkills:
+  race_aviane_levitation:
+    Enabled: true
+    Permission: race.Aviane
+    Skills:
+      - "skill{skill=sneak_aviane_passive} @self ~onTimer:1 ?sneaking ?!onGround"
+      - "aura{aura=cooldownaviane_passive;ticks=20} @self ~onEndPassive{passive=example:race_aviane_levitation}"</pre>
+  <div class="note">Пока игрок в присяде и в воздухе — рывок каждый тик.
+    Приземлился → строка перестаёт выполняться → <code>~onEndPassive</code> вешает
+    ауру на 20 тиков (1 сек), которая условием <code>hasAura</code> в скилле
+    <code>sneak_aviane_passive</code> блокирует новые рывки.</div>
+</div>
+<div class="panel">
+  <h3>Частицы на включение/выключение + кулдаун на конец</h3>
   <pre>PassiveSkills:
   sneak_levitation:
     Permission: mythicpassives.levitation
@@ -491,8 +563,12 @@
       - "lunge{velocity=0.6;velocityY=0.1} @self ~onTimer:2 ?sneaking ?!onGround"
       - "particle{particle=SPELL_WITCH} @self ~onStartPassive ?passive=example:sneak_levitation"
       - "particle{particle=SMOKE} @self ~onEndPassive ?passive=example:sneak_levitation"
-      - "cooldown{s=sneak_levitation} @self ~onEndPassive ?passive=example:sneak_levitation"</pre>
-  <div class="note">Рывок — каждый тик, пока в присяде и в воздухе. Частицы — на включение и выключение.</div>
+      - "cooldown{s=sneak_levitation;seconds=5} @self ~onEndPassive ?passive=example:sneak_levitation"</pre>
+  <div class="note">Механика MythicMobs — <code>cooldown</code> (строчными), параметры
+    <code>s=</code> и <code>seconds=</code>. Механик <code>Cooldown{skill=...}</code> и
+    <code>setSkillCooldown</code> в чистом MythicMobs нет — строка с ними
+    отбрасывается при загрузке с ошибкой
+    <code>Failed to load custom mechanic COOLDOWN</code>.</div>
 </div>
 <div class="panel">
   <h3>Раса: таймер + прыжок + F в воздухе</h3>
@@ -505,6 +581,22 @@
       - "skill{skill=jump_aviane_passive} @self ~onJump ?sneaking"
       - "skill{skill=jump_inair_aviane_passive} @self ~onPressF ?!onGround"</pre>
   <div class="note">Три разных механизма — таймер, Paper-событие прыжка и свап рук.</div>
+</div>
+
+<div class="panel">
+  <h3>Сопутствующий скилл (MythicMobs/Skills)</h3>
+  <pre>sneak_aviane_passive:
+  Conditions:
+    - hasAura{aura=injump} false
+    - hasAura{aura=cooldownaviane_passive} false
+  Skills:
+    - lunge{velocity=0.5;velocityY=-0.1} @forward{lockpitch=true}
+    - aura{aura=airjump;ticks=2} @self
+    - particle{particle=white_ash;size=1;vspread=0.25;hspread=0.25;yoffset=1} @self</pre>
+  <div class="note">Аура <code>cooldownaviane_passive</code> из примера выше блокирует
+    рывки после приземления. Параметр <code>velocityY</code> — с одной «y»:
+    MythicMobs молча игнорирует неизвестные ключи, опечатка приведёт к
+    непредсказуемому поведению.</div>
 </div>
 </div>
 
